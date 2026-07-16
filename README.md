@@ -11,6 +11,23 @@ inferior direito, com a memória de cálculo.
 Roda **inteiramente no seu navegador**. Nenhuma imagem é enviada para qualquer servidor —
 os arquivos são lidos e regravados direto no seu computador.
 
+## O que acontece com o arquivo ao salvar
+
+A **resolução e o formato são sempre preservados** (PNG continua PNG, JPEG continua JPEG).
+
+- **PNG:** gravação sem perda — os pixels saem idênticos, exceto onde a legenda é desenhada.
+- **JPEG:** a imagem é recomprimida com qualidade 0,95, porque não há como escrever a legenda
+  sem reescrever o arquivo. A perda é imperceptível (diferença média medida: 0,5 em 255 por canal).
+  A legenda é sempre desenhada a partir do original em memória, então salvar a mesma imagem
+  várias vezes na mesma sessão **não acumula perdas**.
+
+Os **metadados do original são transplantados** para o arquivo novo: EXIF, ICC, XMP, IPTC e
+comentários no JPEG; `pHYs` (escala física/DPI), `tEXt`, `iCCP` e afins no PNG.
+
+Uma exceção proposital: a tag EXIF de **orientação** é normalizada para `1`. O navegador já aplica
+a rotação aos pixels ao decodificar, então manter a tag original faria o visualizador girar a
+imagem uma segunda vez. Imagens WebP são gravadas sem metadados.
+
 ## Requisitos
 
 **Chrome ou Edge**, por causa da [File System Access API](https://developer.mozilla.org/docs/Web/API/File_System_Access_API),
