@@ -1,0 +1,825 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anotador de Densidade</title>
+<style>
+  /* ===================== TEMA 8-BIT PRETO E BRANCO ===================== */
+  :root{
+    --bg:#000;
+    --fg:#fff;
+    --line:#fff;
+    --mono: ui-monospace, "Cascadia Mono", "Consolas", "Courier New", monospace;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; }
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:var(--mono);
+    font-size:15px;
+    -webkit-font-smoothing:none;
+    image-rendering:pixelated;
+    overflow:hidden;
+  }
+  h1,h2,h3{ margin:0; text-transform:uppercase; letter-spacing:2px; font-weight:700; }
+
+  /* Botões estilo pixel: branco/preto que invertem */
+  button{
+    font-family:var(--mono);
+    font-size:14px;
+    text-transform:uppercase;
+    letter-spacing:1px;
+    background:var(--fg);
+    color:var(--bg);
+    border:3px solid var(--fg);
+    padding:8px 14px;
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    line-height:1;
+    user-select:none;
+  }
+  button:hover{ background:var(--bg); color:var(--fg); }
+  button:active{ transform:translate(2px,2px); }
+  button:disabled{ opacity:.35; cursor:not-allowed; transform:none; background:var(--fg); color:var(--bg); }
+  button.ghost{ background:var(--bg); color:var(--fg); }
+  button.ghost:hover{ background:var(--fg); color:var(--bg); }
+  .ico{ display:inline-block; vertical-align:middle; }
+
+  /* Layout base */
+  #app{ height:100%; display:flex; flex-direction:column; }
+  .hidden{ display:none !important; }
+
+  /* ---------- Tela inicial ---------- */
+  #screen-start{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:22px; text-align:center; padding:24px;
+  }
+  #screen-start h1{ font-size:26px; }
+  #screen-start .sub{ opacity:.8; max-width:520px; line-height:1.6; }
+  .startbtns{ display:flex; gap:16px; flex-wrap:wrap; justify-content:center; }
+  .startbtns button{ font-size:16px; padding:14px 20px; }
+  .note{ font-size:12px; opacity:.65; max-width:560px; line-height:1.6; border:2px dashed var(--line); padding:10px 14px; }
+  .badge-rec{ font-size:10px; background:var(--fg); color:var(--bg); padding:2px 6px; margin-left:6px; }
+
+  /* ---------- Barra superior genérica ---------- */
+  .topbar{
+    display:flex; align-items:center; gap:12px;
+    border-bottom:3px solid var(--line); padding:10px 14px; flex:0 0 auto;
+  }
+  .topbar h2{ font-size:16px; }
+  .topbar .spacer{ flex:1; }
+
+  /* ---------- Tela escolher principal ---------- */
+  #screen-choose{ flex:1; display:flex; flex-direction:column; min-height:0; }
+  #screen-choose .hint{ padding:10px 14px; opacity:.85; border-bottom:2px dashed var(--line); }
+  #grid-choose{ flex:1; overflow:auto; padding:14px; }
+
+  /* Grade de miniaturas (compartilhada) */
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(130px, 1fr));
+    gap:12px;
+    align-content:start;
+  }
+  .thumb{
+    border:3px solid var(--line);
+    background:var(--bg);
+    cursor:pointer;
+    position:relative;
+    overflow:hidden;
+    aspect-ratio:1/1;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .thumb:hover{ outline:3px solid var(--line); outline-offset:-6px; }
+  .thumb .name{
+    position:absolute; left:0; right:0; bottom:0;
+    background:var(--bg); color:var(--fg);
+    font-size:10px; padding:3px 5px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    border-top:2px solid var(--line);
+  }
+  .thumb .flag{
+    position:absolute; top:4px; left:4px;
+    background:var(--fg); color:var(--bg);
+    font-size:10px; padding:2px 5px; letter-spacing:1px;
+  }
+  .thumb.is-principal{ outline:4px solid var(--line); outline-offset:-8px; }
+
+  /* ---------- Área de trabalho (split) ---------- */
+  #screen-work{ flex:1; display:flex; min-height:0; }
+  #leftPane{
+    width:50%; min-width:0; border-right:3px solid var(--line);
+    display:flex; flex-direction:column;
+  }
+  #rightPane{ width:50%; min-width:0; display:flex; flex-direction:column; }
+
+  .pane-head{
+    display:flex; align-items:center; gap:10px;
+    padding:8px 12px; border-bottom:3px solid var(--line); flex:0 0 auto;
+  }
+  .pane-head h3{ font-size:13px; }
+  .pane-head .spacer{ flex:1; }
+
+  #principalStage{
+    flex:1; display:flex; align-items:center; justify-content:center;
+    padding:12px; min-height:0; position:relative; overflow:hidden; background:
+      repeating-conic-gradient(#000 0% 25%, #0a0a0a 0% 50%) 50% / 24px 24px;
+  }
+  #principalStage img{ max-width:100%; max-height:100%; object-fit:contain; cursor:crosshair; }
+  #principalStage .empty{ opacity:.6; text-align:center; line-height:1.6; }
+
+  /* Bolinha de referência (marcador) na imagem principal */
+  .marker{
+    position:absolute; width:20px; height:20px; margin:0;
+    transform:translate(-50%,-50%);
+    border-radius:50%;
+    background:#fff; border:3px solid #000;
+    box-shadow:0 0 0 2px #fff;
+    cursor:pointer; z-index:5;
+  }
+  .marker:hover{ background:#000; box-shadow:0 0 0 2px #fff, 0 0 0 4px #000; }
+
+  .pane-hint{ font-size:11px; opacity:.75; padding:5px 12px; border-bottom:2px dashed var(--line); }
+
+  /* Grade dentro do painel direito */
+  #grid-work{ flex:1; overflow:auto; padding:12px; }
+
+  /* Visualizador de imagem inteira */
+  #viewer{ flex:1; display:flex; flex-direction:column; min-height:0; }
+  #imgStage{
+    flex:1; position:relative; display:flex; align-items:center; justify-content:center;
+    padding:10px; min-height:0; overflow:hidden;
+    background:repeating-conic-gradient(#000 0% 25%, #0a0a0a 0% 50%) 50% / 24px 24px;
+  }
+  #imgWrap{ position:relative; display:inline-block; max-width:100%; max-height:100%; }
+  #imgWrap img{ display:block; max-width:100%; max-height:100%; object-fit:contain; }
+
+  /* Caixa preta da densidade (canto inferior direito) — prévia ao vivo */
+  #densBox{
+    position:absolute; right:8px; bottom:8px;
+    background:#000; color:#fff;
+    border:2px solid #fff;
+    padding:4px 7px;
+    font-family:var(--mono);
+    line-height:1.25;
+    text-align:right;
+    pointer-events:none;
+    max-width:80%;
+  }
+  #densBox .l1{ font-weight:700; font-size:12px; letter-spacing:1px; }
+  #densBox .l2{ font-size:12px; }
+
+  /* Controles (inputs) abaixo da imagem */
+  #controls{
+    flex:0 0 auto; border-top:3px solid var(--line);
+    padding:10px 12px; display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;
+  }
+  .field{ display:flex; flex-direction:column; gap:4px; }
+  .field label{ font-size:11px; text-transform:uppercase; letter-spacing:1px; opacity:.85; }
+  .field input{
+    font-family:var(--mono); font-size:16px;
+    background:#000; color:#fff; border:3px solid #fff;
+    padding:8px 10px; width:140px;
+  }
+  .field input:focus{ outline:3px solid #fff; outline-offset:-7px; }
+  .field input[readonly]{ opacity:.85; }
+  #controls .spacer{ flex:1; }
+  #saveBtn{ font-size:16px; padding:12px 18px; }
+
+  /* Toast / avisos */
+  #toast{
+    position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
+    background:#fff; color:#000; border:3px solid #000;
+    padding:10px 16px; font-size:14px; max-width:80%;
+    box-shadow:6px 6px 0 #fff; z-index:50; text-align:center;
+  }
+  #warn{
+    background:#fff; color:#000; padding:10px 14px; font-size:13px; text-align:center;
+    border-bottom:3px solid #000;
+  }
+
+  /* Área de soltar (arrastar imagens/pasta para dentro) */
+  #dropzone{
+    position:fixed; inset:0; z-index:100;
+    background:rgba(0,0,0,.88);
+    border:6px dashed #fff;
+    display:flex; align-items:center; justify-content:center;
+    pointer-events:none; /* nunca bloqueia o evento de drop */
+  }
+  #dropzone .dz{
+    border:4px solid #fff; background:#000; color:#fff;
+    padding:26px 34px; text-align:center;
+    font-size:20px; letter-spacing:3px; text-transform:uppercase; line-height:1.7;
+  }
+  #dropzone .dz small{ display:block; font-size:12px; letter-spacing:1px; opacity:.75; text-transform:none; margin-top:8px; }
+  .droptip{ font-size:13px; opacity:.7; }
+</style>
+
+<!-- Overlay exibido enquanto arrasta arquivos sobre a janela -->
+<div id="dropzone" class="hidden">
+  <div class="dz">
+    Solte as imagens aqui
+    <small>Aceita arquivos soltos ou uma pasta inteira</small>
+  </div>
+</div>
+
+<div id="app">
+  <!-- Aviso de compatibilidade -->
+  <div id="warn" class="hidden"></div>
+
+  <!-- ===================== TELA INICIAL ===================== -->
+  <section id="screen-start">
+    <h1>Anotador de Densidade</h1>
+    <div class="sub">
+      Selecione as imagens, escolha uma como referência principal e anote
+      <b>unidades</b>, <b>área</b> e a <b>densidade</b> calculada — gravando a legenda na própria imagem.
+    </div>
+    <div class="startbtns">
+      <button id="btnPickDir">📁 Selecionar pasta <span class="badge-rec">sem prompts</span></button>
+      <button class="ghost" id="btnPickFilesStart">＋ Selecionar imagens</button>
+    </div>
+    <div class="droptip">…ou <b>arraste</b> imagens — ou uma <b>pasta inteira</b> — para qualquer lugar da janela.</div>
+    <div class="note" id="startNote">
+      <b>Recomendado:</b> "Selecionar pasta" — ou <b>arrastar uma pasta</b> — pede permissão de gravação
+      <b>uma única vez</b> e depois sobrescreve os arquivos sem incomodar.
+      Imagens avulsas (botão ou arrastadas) pedem permissão por arquivo ao salvar.
+    </div>
+  </section>
+
+  <!-- ===================== ESCOLHER PRINCIPAL ===================== -->
+  <section id="screen-choose" class="hidden">
+    <div class="topbar">
+      <h2>Escolha a imagem principal</h2>
+      <div class="spacer"></div>
+      <button class="ghost" id="btnAddChoose">＋ Adicionar imagens</button>
+      <button class="ghost" id="btnDirChoose">📁 Pasta</button>
+    </div>
+    <div class="hint">Clique na imagem que ficará fixa à esquerda como <b>referência</b>.</div>
+    <div id="grid-choose" class="grid"></div>
+  </section>
+
+  <!-- ===================== ÁREA DE TRABALHO ===================== -->
+  <section id="screen-work" class="hidden">
+    <!-- Metade esquerda: imagem principal -->
+    <div id="leftPane">
+      <div class="pane-head">
+        <h3>Principal (referência)</h3>
+        <div class="spacer"></div>
+        <button class="ghost" id="btnLimpar">Limpar pontos</button>
+        <button class="ghost" id="btnTrocar">Trocar</button>
+      </div>
+      <div class="pane-hint">Clique na imagem para marcar um ponto já trabalhado. Clique na bolinha para removê-la.</div>
+      <div id="principalStage"><div class="empty">Nenhuma imagem principal.</div></div>
+    </div>
+
+    <!-- Metade direita: miniaturas OU visualizador -->
+    <div id="rightPane">
+      <!-- Sub-tela: grade -->
+      <div id="grid-view" style="display:flex; flex-direction:column; min-height:0; flex:1;">
+        <div class="pane-head">
+          <h3>Imagens — clique para anotar</h3>
+          <div class="spacer"></div>
+          <button class="ghost" id="btnAddWork">＋ Adicionar</button>
+          <button class="ghost" id="btnDirWork">📁 Pasta</button>
+        </div>
+        <div id="grid-work" class="grid"></div>
+      </div>
+
+      <!-- Sub-tela: visualizador -->
+      <div id="viewer" class="hidden">
+        <div class="pane-head">
+          <button class="ghost" id="btnBack">← Voltar</button>
+          <h3 id="viewerName" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></h3>
+          <div class="spacer"></div>
+          <button id="saveBtn" title="Sobrescrever a imagem com a legenda">
+            <svg class="ico" viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+              <rect x="1.2" y="1.2" width="13.6" height="13.6" fill="none" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M4 1.2 V5 H10.5 V1.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+              <rect x="9.2" y="2.2" width="1.4" height="2" fill="currentColor"/>
+              <rect x="4.4" y="8.4" width="7.2" height="5.4" fill="currentColor"/>
+              <rect x="5.6" y="9.6" width="4.8" height="1.1" fill="#000"/>
+            </svg>
+            Salvar
+          </button>
+        </div>
+
+        <div id="imgStage">
+          <div id="imgWrap">
+            <img id="viewerImg" alt="">
+            <div id="densBox" class="hidden">
+              <div class="l1"></div>
+              <div class="l2"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="controls">
+          <div class="field">
+            <label for="inpUnid">Unidades (nº inteiro)</label>
+            <input id="inpUnid" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
+          </div>
+          <div class="field">
+            <label for="inpArea">Área (ponto ou vírgula)</label>
+            <input id="inpArea" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00">
+          </div>
+          <div class="field">
+            <label for="inpDens">Densidade (calculada)</label>
+            <input id="inpDens" type="text" readonly tabindex="-1" placeholder="—">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+"use strict";
+
+/* ===================== ESTADO ===================== */
+const FS_OK = ('showOpenFilePicker' in window) && ('showDirectoryPicker' in window);
+let images = [];            // { id, name, type, file, handle, thumbUrl, blob, annotated, unid, area, dens }
+let principalId = null;
+let currentId = null;       // imagem aberta no visualizador
+let idSeq = 1;
+const IMG_RE = /\.(png|jpe?g|gif|bmp|webp)$/i;
+
+/* ===================== FORMATAÇÃO (pt-BR) ===================== */
+const nf = (min,max)=> new Intl.NumberFormat('pt-BR',{minimumFractionDigits:min, maximumFractionDigits:max});
+const fmtInt  = n => Number.isFinite(n) ? nf(0,0).format(n) : '—';
+const fmtArea = n => Number.isFinite(n) ? nf(0,3).format(n) : '—';
+const fmtDens = n => Number.isFinite(n) ? nf(0,2).format(n) : '—';
+function parseArea(s){
+  if(s==null) return NaN;
+  s = String(s).trim().replace(',', '.').replace(/[^0-9.\-]/g,'');
+  if(s==='' || s==='-' || s==='.') return NaN;
+  return parseFloat(s);
+}
+
+/* ===================== HELPERS DE ELEMENTOS ===================== */
+const $ = id => document.getElementById(id);
+const scrStart = $('screen-start'), scrChoose = $('screen-choose'), scrWork = $('screen-work');
+const gridView = $('grid-view'), viewer = $('viewer');
+
+function show(el){ el.classList.remove('hidden'); }
+function hide(el){ el.classList.add('hidden'); }
+
+let toastTimer = null;
+function toast(msg, ms=2600){
+  let t = $('toast');
+  if(!t){ t = document.createElement('div'); t.id='toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> t.remove(), ms);
+}
+
+/* ===================== CARREGAR IMAGENS ===================== */
+function addImage(name, type, file, handle){
+  // dedup simples por nome+tamanho
+  if(images.some(i => i.name===name && i.file && file && i.file.size===file.size)) return null;
+  const img = {
+    id: idSeq++, name, type: type || 'image/png', file, handle,
+    thumbUrl: URL.createObjectURL(file),
+    blob: null, annotated:false, unid:null, area:null, dens:null
+  };
+  images.push(img);
+  return img;
+}
+
+async function pickDirectory(){
+  try{
+    const dir = await window.showDirectoryPicker({ mode:'readwrite' });
+    let count = 0;
+    for await (const entry of dir.values()){
+      if(entry.kind==='file' && IMG_RE.test(entry.name)){
+        const file = await entry.getFile();
+        if(addImage(entry.name, file.type, file, entry)) count++;
+      }
+    }
+    if(count===0) toast('Nenhuma imagem encontrada na pasta.');
+    else toast(count+' imagem(ns) carregada(s) — gravação liberada.');
+    afterLoad();
+  }catch(err){ if(err && err.name!=='AbortError') toast('Erro ao abrir pasta: '+err.message); }
+}
+
+async function pickFiles(){
+  try{
+    if(FS_OK){
+      const handles = await window.showOpenFilePicker({
+        multiple:true,
+        types:[{ description:'Imagens', accept:{'image/*':['.png','.jpg','.jpeg','.gif','.bmp','.webp']} }]
+      });
+      let count=0;
+      for(const h of handles){
+        const file = await h.getFile();
+        if(addImage(file.name, file.type, file, h)) count++;
+      }
+      if(count) toast(count+' imagem(ns) adicionada(s).');
+      afterLoad();
+    }else{
+      fallbackInput.click(); // navegador sem File System Access
+    }
+  }catch(err){ if(err && err.name!=='AbortError') toast('Erro: '+err.message); }
+}
+
+// Fallback (Firefox/Safari): <input type=file>
+const fallbackInput = document.createElement('input');
+fallbackInput.type='file'; fallbackInput.multiple=true; fallbackInput.accept='image/*';
+fallbackInput.style.display='none';
+document.body.appendChild(fallbackInput);
+fallbackInput.addEventListener('change', ()=>{
+  let count=0;
+  for(const file of fallbackInput.files){
+    if(addImage(file.name, file.type, file, null)) count++;
+  }
+  fallbackInput.value='';
+  if(count) toast(count+' imagem(ns) adicionada(s).');
+  afterLoad();
+});
+
+/* ===================== ARRASTAR E SOLTAR ===================== */
+const dropzone = $('dropzone');
+let dragDepth = 0;   // contador evita piscar ao passar sobre elementos filhos
+const hasFiles = e => !!e.dataTransfer && Array.from(e.dataTransfer.types||[]).includes('Files');
+
+window.addEventListener('dragenter', e=>{
+  if(!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth++; show(dropzone);
+});
+window.addEventListener('dragover', e=>{
+  if(!hasFiles(e)) return;
+  e.preventDefault();                       // necessário para o drop ser permitido
+  e.dataTransfer.dropEffect = 'copy';
+});
+window.addEventListener('dragleave', e=>{
+  if(!hasFiles(e)) return;
+  dragDepth--;
+  if(dragDepth<=0){ dragDepth=0; hide(dropzone); }
+});
+window.addEventListener('drop', onDrop);
+
+async function onDrop(e){
+  if(!hasFiles(e)) return;
+  e.preventDefault();                       // impede o navegador de simplesmente abrir a imagem
+  dragDepth = 0; hide(dropzone);
+
+  // IMPORTANTE: getAsFileSystemHandle() tem de ser chamado de forma SÍNCRONA,
+  // antes de qualquer await — depois disso a lista de itens é invalidada.
+  let handlePromises = null;
+  const items = e.dataTransfer.items;
+  if(FS_OK && items && items.length && items[0].getAsFileSystemHandle){
+    handlePromises = [];
+    for(let i=0; i<items.length; i++){
+      if(items[i].kind === 'file') handlePromises.push(items[i].getAsFileSystemHandle());
+    }
+  }
+  // Cópia síncrona: a FileList também é invalidada depois que o handler cede o controle
+  const droppedFiles = e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+
+  let count = 0, dirGranted = false;
+  try{
+    if(handlePromises){
+      const handles = await Promise.all(handlePromises);
+      for(const h of handles){
+        if(!h) continue;   // pode vir null: caímos no fallback logo abaixo
+        if(h.kind === 'directory'){
+          // Pasta arrastada: um único pedido de permissão cobre todos os arquivos dentro
+          try{ dirGranted = (await h.requestPermission({ mode:'readwrite' })) === 'granted'; }catch(_){}
+          for await (const entry of h.values()){
+            if(entry.kind==='file' && IMG_RE.test(entry.name)){
+              const file = await entry.getFile();
+              if(addImage(entry.name, file.type, file, entry)) count++;
+            }
+          }
+        }else if(h.kind === 'file' && IMG_RE.test(h.name)){
+          // Arquivo arrastado: vem com handle real, então dá para sobrescrever depois
+          const file = await h.getFile();
+          if(addImage(h.name, file.type, file, h)) count++;
+        }
+      }
+    }
+    // Fallback: navegador sem File System Access, ou handles que vieram nulos.
+    // Carrega a imagem mesmo assim — só que salvar vira download em vez de sobrescrever.
+    if(count === 0 && droppedFiles.length){
+      for(const file of droppedFiles){
+        if(IMG_RE.test(file.name) && addImage(file.name, file.type, file, null)) count++;
+      }
+    }
+  }catch(err){
+    toast('Erro ao soltar: ' + err.message);
+  }
+
+  if(count===0) toast('Nenhuma imagem encontrada no que foi solto.');
+  else toast(count + ' imagem(ns) adicionada(s)' + (dirGranted ? ' — gravação liberada.' : '.'));
+  afterLoad();
+}
+
+function afterLoad(){
+  if(images.length===0) return;
+  if(principalId==null){ goChoose(); }
+  else { renderWorkGrid(); renderPrincipal(); }
+}
+
+/* Lê os bytes originais para memória (estável mesmo após sobrescrever o disco) */
+async function ensureBlob(img){
+  if(!img.blob){
+    const src = img.file || (img.handle ? await img.handle.getFile() : null);
+    const buf = await src.arrayBuffer();
+    img.blob = new Blob([buf], { type: img.type });
+  }
+  return img.blob;
+}
+
+/* ===================== NAVEGAÇÃO DE TELAS ===================== */
+function goChoose(){
+  hide(scrStart); hide(scrWork); show(scrChoose);
+  renderChooseGrid();
+}
+function goWork(){
+  hide(scrStart); hide(scrChoose); show(scrWork);
+  show(gridView); hide(viewer);
+  renderPrincipal(); renderWorkGrid();
+}
+
+/* ===================== RENDER: grade de escolha ===================== */
+function renderChooseGrid(){
+  const g = $('grid-choose');
+  g.innerHTML='';
+  images.forEach(img=>{
+    g.appendChild(makeThumb(img, ()=> setPrincipal(img.id),
+      img.id===principalId ? 'PRINCIPAL' : null));
+  });
+}
+
+/* ===================== RENDER: grade de trabalho (painel direito) ===================== */
+function renderWorkGrid(){
+  const g = $('grid-work');
+  g.innerHTML='';
+  const others = images.filter(i=> i.id!==principalId);
+  if(others.length===0){
+    g.innerHTML = '<div style="opacity:.6; padding:8px;">Nenhuma outra imagem. Use "Adicionar" ou "Pasta".</div>';
+    return;
+  }
+  others.forEach(img=>{
+    g.appendChild(makeThumb(img, ()=> openViewer(img.id),
+      img.annotated ? '✓ SALVO' : null));
+  });
+}
+
+function makeThumb(img, onClick, flag){
+  const d = document.createElement('div');
+  d.className = 'thumb' + (img.id===principalId ? ' is-principal' : '');
+  d.innerHTML =
+    `<img src="${img.thumbUrl}" alt="">` +
+    (flag ? `<div class="flag">${flag}</div>` : '') +
+    `<div class="name">${escapeHtml(img.name)}</div>`;
+  d.addEventListener('click', onClick);
+  return d;
+}
+function escapeHtml(s){ return s.replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ===================== IMAGEM PRINCIPAL (metade esquerda) ===================== */
+async function setPrincipal(id){
+  principalId = id;
+  goWork();
+}
+let principalRO = null;   // ResizeObserver para reposicionar os marcadores
+
+async function renderPrincipal(){
+  const stage = $('principalStage');
+  if(principalRO){ principalRO.disconnect(); principalRO = null; }
+
+  const img = images.find(i=> i.id===principalId);
+  if(!img){ stage.innerHTML = '<div class="empty">Nenhuma imagem principal.</div>'; return; }
+  if(!img.markers) img.markers = [];   // pontos de referência (apenas em memória)
+
+  const blob = await ensureBlob(img);
+  const url = URL.createObjectURL(blob);
+  stage.innerHTML='';
+  const el = document.createElement('img');
+  el.alt = img.name;
+
+  // Clique na imagem = adiciona um ponto (guardado em fração 0..1 da imagem)
+  el.addEventListener('click', (e)=>{
+    const ir = el.getBoundingClientRect();
+    if(!ir.width || !ir.height) return;              // imagem ainda sem layout: ignora
+    const fx = (e.clientX - ir.left)/ir.width;
+    const fy = (e.clientY - ir.top )/ir.height;
+    if(!(fx>=0 && fx<=1 && fy>=0 && fy<=1)) return;  // rejeita fora da imagem e NaN
+    img.markers.push({ x:fx, y:fy });
+    positionMarkers(stage, el, img);
+  });
+
+  el.src = url;
+  stage.appendChild(el);
+
+  const draw = ()=> positionMarkers(stage, el, img);
+  if(el.complete && el.naturalWidth) draw();
+  el.addEventListener('load', ()=>{ URL.revokeObjectURL(url); draw(); });
+
+  // Recalcula posições quando o painel muda de tamanho (janela redimensionada, etc.)
+  principalRO = new ResizeObserver(draw);
+  principalRO.observe(stage);
+}
+
+// Desenha/posiciona as bolinhas sobre a imagem, a partir das frações guardadas
+function positionMarkers(stage, el, img){
+  stage.querySelectorAll('.marker').forEach(m=> m.remove());
+  const sr = stage.getBoundingClientRect();
+  const ir = el.getBoundingClientRect();
+  if(!ir.width) return;
+  (img.markers||[]).forEach((m)=>{
+    const dot = document.createElement('div');
+    dot.className = 'marker';
+    dot.style.left = ((ir.left - sr.left) + m.x*ir.width)  + 'px';
+    dot.style.top  = ((ir.top  - sr.top ) + m.y*ir.height) + 'px';
+    dot.title = 'Clique para remover';
+    dot.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const i = img.markers.indexOf(m);
+      if(i>=0) img.markers.splice(i,1);
+      positionMarkers(stage, el, img);
+    });
+    stage.appendChild(dot);
+  });
+}
+
+/* ===================== VISUALIZADOR (imagem inteira + inputs) ===================== */
+const inpUnid = $('inpUnid'), inpArea = $('inpArea'), inpDens = $('inpDens');
+const densBox = $('densBox');
+
+async function openViewer(id){
+  currentId = id;
+  const img = images.find(i=> i.id===id);
+  if(!img) return;
+  $('viewerName').textContent = img.name;
+
+  const blob = await ensureBlob(img);
+  $('viewerImg').src = URL.createObjectURL(blob);
+
+  // restaura valores já anotados, se houver
+  inpUnid.value = img.unid!=null ? String(img.unid) : '';
+  inpArea.value = img.area!=null ? String(img.area).replace('.', ',') : '';
+  compute();
+
+  hide(gridView); show(viewer);
+  setTimeout(()=>{ inpUnid.focus(); inpUnid.select(); }, 30);
+}
+
+function closeViewer(){
+  hide(viewer); show(gridView);
+  renderWorkGrid();
+  currentId = null;
+}
+
+function currentValues(){
+  const und = parseInt(inpUnid.value.replace(/[^0-9\-]/g,''), 10);
+  const area = parseArea(inpArea.value);
+  let dens = NaN;
+  if(Number.isFinite(und) && Number.isFinite(area) && area!==0) dens = und/area;
+  return { und, area, dens };
+}
+
+function compute(){
+  const { und, area, dens } = currentValues();
+  inpDens.value = Number.isFinite(dens) ? fmtDens(dens) : '';
+  // atualiza a caixa preta ao vivo
+  if(Number.isFinite(dens)){
+    densBox.querySelector('.l1').textContent = 'DENSIDADE ' + fmtDens(dens);
+    densBox.querySelector('.l2').textContent = `${fmtInt(und)} ÷ ${fmtArea(area)} = ${fmtDens(dens)}`;
+    show(densBox);
+  }else{
+    hide(densBox);
+  }
+  $('saveBtn').disabled = !Number.isFinite(dens);
+}
+
+// unidades: apenas inteiros
+inpUnid.addEventListener('input', ()=>{
+  inpUnid.value = inpUnid.value.replace(/[^0-9]/g,'');
+  compute();
+});
+inpArea.addEventListener('input', compute);
+// Enter na área foca o botão salvar
+inpArea.addEventListener('keydown', e=>{ if(e.key==='Enter' && !$('saveBtn').disabled) $('saveBtn').focus(); });
+
+/* ===================== DESENHAR A CAIXA NO CANVAS (para gravar) ===================== */
+function drawBox(ctx, W, H, und, area, dens){
+  const line1 = 'DENSIDADE ' + fmtDens(dens);
+  const line2 = `${fmtInt(und)} ÷ ${fmtArea(area)} = ${fmtDens(dens)}`;
+  const fs = Math.max(14, Math.min(W*0.020, 46));   // "pequeno, porém legível"
+  const pad = Math.round(fs*0.55);
+  const gap = Math.round(fs*0.25);
+  const lineH = Math.round(fs*1.2);
+  const fontBold = `700 ${fs}px ui-monospace, "Courier New", monospace`;
+  const fontReg  = `${fs}px ui-monospace, "Courier New", monospace`;
+
+  ctx.textBaseline='top';
+  ctx.font = fontBold; const w1 = ctx.measureText(line1).width;
+  ctx.font = fontReg;  const w2 = ctx.measureText(line2).width;
+
+  const boxW = Math.ceil(Math.max(w1,w2) + pad*2);
+  const boxH = Math.ceil(pad*2 + lineH*2 + gap);
+  const margin = Math.max(8, Math.round(W*0.012));
+  const x = W - boxW - margin;
+  const y = H - boxH - margin;
+
+  const b = Math.max(2, Math.round(fs*0.12)); // borda branca
+  ctx.fillStyle = '#fff'; ctx.fillRect(x-b, y-b, boxW+2*b, boxH+2*b);
+  ctx.fillStyle = '#000'; ctx.fillRect(x, y, boxW, boxH);
+  ctx.fillStyle = '#fff';
+  ctx.font = fontBold; ctx.fillText(line1, x+pad, y+pad);
+  ctx.font = fontReg;  ctx.fillText(line2, x+pad, y+pad+lineH+gap);
+}
+
+async function burnImage(img, und, area, dens){
+  const src = await ensureBlob(img);            // sempre a partir do ORIGINAL (evita legenda dupla)
+  const bmp = await createImageBitmap(src);
+  const canvas = document.createElement('canvas');
+  canvas.width = bmp.width; canvas.height = bmp.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bmp, 0, 0);
+  bmp.close && bmp.close();
+  drawBox(ctx, canvas.width, canvas.height, und, area, dens);
+  let type = (img.type && /^image\/(png|jpeg|webp)$/.test(img.type)) ? img.type : 'image/png';
+  const q = (type==='image/jpeg'||type==='image/webp') ? 0.95 : undefined;
+  return await new Promise(res => canvas.toBlob(res, type, q));
+}
+
+async function ensureWritable(handle){
+  const opts = { mode:'readwrite' };
+  if(await handle.queryPermission(opts) === 'granted') return true;
+  if(await handle.requestPermission(opts) === 'granted') return true;
+  return false;
+}
+
+/* ===================== SALVAR (sobrescrever) ===================== */
+async function saveCurrent(){
+  const img = images.find(i=> i.id===currentId);
+  if(!img) return;
+  const { und, area, dens } = currentValues();
+  if(!Number.isFinite(dens)){ toast('Preencha unidades e área (área ≠ 0).'); return; }
+
+  const btn = $('saveBtn'); btn.disabled = true;
+  try{
+    const blob = await burnImage(img, und, area, dens);
+
+    if(FS_OK && img.handle){
+      if(!(await ensureWritable(img.handle))){ toast('Permissão de gravação negada.'); return; }
+      const w = await img.handle.createWritable();
+      await w.write(blob);
+      await w.close();
+      toast('✓ Sobrescrito: ' + img.name);
+    }else{
+      // Fallback: baixar novo arquivo (não sobrescreve o original)
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = img.name;
+      a.click();
+      setTimeout(()=> URL.revokeObjectURL(a.href), 4000);
+      toast('Arquivo baixado (navegador não permite sobrescrever).');
+    }
+
+    // marca como anotado e atualiza miniatura para a versão salva
+    img.annotated = true; img.unid = und; img.area = area; img.dens = dens;
+    URL.revokeObjectURL(img.thumbUrl);
+    img.thumbUrl = URL.createObjectURL(blob);
+  }catch(err){
+    toast('Erro ao salvar: ' + err.message);
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+/* ===================== LIGAÇÕES DE BOTÕES ===================== */
+$('btnPickDir').addEventListener('click', pickDirectory);
+$('btnPickFilesStart').addEventListener('click', pickFiles);
+$('btnAddChoose').addEventListener('click', pickFiles);
+$('btnDirChoose').addEventListener('click', pickDirectory);
+$('btnAddWork').addEventListener('click', pickFiles);
+$('btnDirWork').addEventListener('click', pickDirectory);
+$('btnTrocar').addEventListener('click', goChoose);
+$('btnLimpar').addEventListener('click', ()=>{
+  const img = images.find(i=> i.id===principalId);
+  if(img && img.markers && img.markers.length){ img.markers = []; renderPrincipal(); }
+});
+$('btnBack').addEventListener('click', closeViewer);
+$('saveBtn').addEventListener('click', saveCurrent);
+
+/* ===================== COMPATIBILIDADE ===================== */
+(function checkEnv(){
+  const w = $('warn');
+  if(!FS_OK){
+    w.classList.remove('hidden');
+    w.innerHTML = '⚠ Este navegador não permite sobrescrever arquivos. Use <b>Chrome</b> ou <b>Edge</b> ' +
+                  'para gravar na própria imagem. Aqui o salvamento apenas <b>baixa</b> uma cópia.';
+    $('btnPickDir').style.display='none';
+    $('startNote').textContent = 'Neste navegador as imagens são carregadas normalmente, mas o botão Salvar baixa uma cópia (não sobrescreve o original). Para sobrescrever, abra em Chrome/Edge.';
+  }else if(!window.isSecureContext){
+    w.classList.remove('hidden');
+    w.innerHTML = '⚠ Contexto não seguro. Se o salvamento falhar, sirva a pasta via <code>http://localhost</code> ou abra o arquivo direto no Chrome/Edge.';
+  }
+})();
+</script>
