@@ -28,8 +28,10 @@ em vez de sobrescrever o original.
 3. Na metade direita, clique numa miniatura para abri-la.
 4. Preencha **unidades** (o foco já está lá) → **Tab** → **área** (aceita `,` ou `.`).
    A densidade (`unidades ÷ área`) é calculada na hora.
-5. Clique no **disquete** para sobrescrever a imagem com a legenda.
-6. **← Voltar** retorna à lista para anotar a próxima.
+5. Se a legenda estiver cobrindo algo importante, o botão **Legenda** (canto inferior direito)
+   alterna entre os quatro cantos da foto. A última escolha vira o padrão da próxima imagem.
+6. **Salvar e voltar** sobrescreve a imagem com a legenda e volta para a lista.
+   **Cancelar** volta sem gravar nada, descartando o que foi digitado.
 
 Na imagem de referência à esquerda, clique para marcar com uma bolinha os pontos já trabalhados
 (clique na bolinha para removê-la). Essas marcações são só visuais e não são gravadas em nada.

@@ -153,20 +153,21 @@
     padding:10px; min-height:0; overflow:hidden;
     background:repeating-conic-gradient(#000 0% 25%, #0a0a0a 0% 50%) 50% / 24px 24px;
   }
-  #imgWrap{ position:relative; display:inline-block; max-width:100%; max-height:100%; }
-  #imgWrap img{ display:block; max-width:100%; max-height:100%; object-fit:contain; }
+  /* A imagem é filha direta do palco: assim max-height:100% resolve contra uma
+     altura definida e a imagem cabe de verdade (inclusive em retrato). */
+  #viewerImg{ display:block; max-width:100%; max-height:100%; }
 
-  /* Caixa preta da densidade (canto inferior direito) — prévia ao vivo */
+  /* Caixa preta da densidade — prévia ao vivo, posicionada por JS num dos 4 cantos */
   #densBox{
-    position:absolute; right:8px; bottom:8px;
+    position:absolute;
     background:#000; color:#fff;
     border:2px solid #fff;
     padding:4px 7px;
     font-family:var(--mono);
     line-height:1.25;
-    text-align:right;
     pointer-events:none;
     max-width:80%;
+    z-index:4;
   }
   #densBox .l1{ font-weight:700; font-size:12px; letter-spacing:1px; }
   #densBox .l2{ font-size:12px; }
@@ -186,7 +187,9 @@
   .field input:focus{ outline:3px solid #fff; outline-offset:-7px; }
   .field input[readonly]{ opacity:.85; }
   #controls .spacer{ flex:1; }
-  #saveBtn{ font-size:16px; padding:12px 18px; }
+  #btnSaveBack{ font-size:15px; padding:11px 16px; }
+  #btnLegendPos{ font-size:12px; padding:8px 12px; }
+  #btnLegendPos .ico{ margin-right:2px; }
 
   /* Toast / avisos */
   #toast{
@@ -290,10 +293,7 @@
       <!-- Sub-tela: visualizador -->
       <div id="viewer" class="hidden">
         <div class="pane-head">
-          <button class="ghost" id="btnBack">← Voltar</button>
-          <h3 id="viewerName" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></h3>
-          <div class="spacer"></div>
-          <button id="saveBtn" title="Sobrescrever a imagem com a legenda">
+          <button id="btnSaveBack" title="Sobrescrever a imagem com a legenda e voltar à lista">
             <svg class="ico" viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
               <rect x="1.2" y="1.2" width="13.6" height="13.6" fill="none" stroke="currentColor" stroke-width="1.6"/>
               <path d="M4 1.2 V5 H10.5 V1.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
@@ -301,17 +301,18 @@
               <rect x="4.4" y="8.4" width="7.2" height="5.4" fill="currentColor"/>
               <rect x="5.6" y="9.6" width="4.8" height="1.1" fill="#000"/>
             </svg>
-            Salvar
+            Salvar e voltar
           </button>
+          <h3 id="viewerName" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></h3>
+          <div class="spacer"></div>
+          <button class="ghost" id="btnCancel" title="Voltar à lista sem gravar nada">✕ Cancelar</button>
         </div>
 
         <div id="imgStage">
-          <div id="imgWrap">
-            <img id="viewerImg" alt="">
-            <div id="densBox" class="hidden">
-              <div class="l1"></div>
-              <div class="l2"></div>
-            </div>
+          <img id="viewerImg" alt="">
+          <div id="densBox" class="hidden">
+            <div class="l1"></div>
+            <div class="l2"></div>
           </div>
         </div>
 
@@ -328,6 +329,14 @@
             <label for="inpDens">Densidade (calculada)</label>
             <input id="inpDens" type="text" readonly tabindex="-1" placeholder="—">
           </div>
+          <div class="spacer"></div>
+          <button class="ghost" id="btnLegendPos" title="Trocar o canto da legenda na foto">
+            <svg class="ico" viewBox="0 0 20 14" width="22" height="16" aria-hidden="true">
+              <rect x="1" y="1" width="18" height="12" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <rect id="legendMark" x="11" y="8" width="7" height="4" fill="currentColor"/>
+            </svg>
+            Legenda
+          </button>
         </div>
       </div>
     </div>
@@ -649,6 +658,12 @@ function positionMarkers(stage, el, img){
 /* ===================== VISUALIZADOR (imagem inteira + inputs) ===================== */
 const inpUnid = $('inpUnid'), inpArea = $('inpArea'), inpDens = $('inpDens');
 const densBox = $('densBox');
+const viewerImg = $('viewerImg');
+
+// Cantos possíveis para a legenda, na ordem em que o botão alterna
+const CANTOS = ['br','bl','tl','tr'];
+let lastLegendPos = 'br';   // lembra a última escolha e usa como padrão na próxima imagem
+let viewerRO = null;        // reposiciona a legenda quando o painel muda de tamanho
 
 async function openViewer(id){
   currentId = id;
@@ -656,8 +671,17 @@ async function openViewer(id){
   if(!img) return;
   $('viewerName').textContent = img.name;
 
+  if(!img.legendPos) img.legendPos = lastLegendPos;
+  updateLegendBtn(img.legendPos);
+
   const blob = await ensureBlob(img);
-  $('viewerImg').src = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(blob);
+  viewerImg.addEventListener('load', function onLoad(){
+    viewerImg.removeEventListener('load', onLoad);
+    URL.revokeObjectURL(url);
+    positionDensBox();
+  });
+  viewerImg.src = url;
 
   // restaura valores já anotados, se houver
   inpUnid.value = img.unid!=null ? String(img.unid) : '';
@@ -665,13 +689,65 @@ async function openViewer(id){
   compute();
 
   hide(gridView); show(viewer);
+
+  if(viewerRO) viewerRO.disconnect();
+  viewerRO = new ResizeObserver(positionDensBox);
+  viewerRO.observe($('imgStage'));
+
   setTimeout(()=>{ inpUnid.focus(); inpUnid.select(); }, 30);
 }
 
 function closeViewer(){
+  if(viewerRO){ viewerRO.disconnect(); viewerRO = null; }
   hide(viewer); show(gridView);
   renderWorkGrid();
   currentId = null;
+}
+
+/* Ancora a caixa da legenda no canto escolhido DA IMAGEM (não do painel),
+   medindo o retângulo real da imagem — assim vale para qualquer proporção. */
+function positionDensBox(){
+  const img = images.find(i=> i.id===currentId);
+  if(!img || densBox.classList.contains('hidden')) return;
+  const stage = $('imgStage');
+  const sr = stage.getBoundingClientRect();
+  const ir = viewerImg.getBoundingClientRect();
+  if(!ir.width || !ir.height) return;
+
+  const inset = 8;
+  const esq  = (ir.left   - sr.left)   + inset;   // distâncias até cada borda da imagem
+  const dir  = (sr.right  - ir.right)  + inset;
+  const topo = (ir.top    - sr.top)    + inset;
+  const base = (sr.bottom - ir.bottom) + inset;
+
+  const pos = img.legendPos || 'br';
+  const daEsquerda = (pos === 'bl' || pos === 'tl');
+  const doTopo     = (pos === 'tl' || pos === 'tr');
+
+  densBox.style.left   = daEsquerda ? esq + 'px' : 'auto';
+  densBox.style.right  = daEsquerda ? 'auto' : dir + 'px';
+  densBox.style.top    = doTopo ? topo + 'px' : 'auto';
+  densBox.style.bottom = doTopo ? 'auto' : base + 'px';
+  densBox.style.textAlign = daEsquerda ? 'left' : 'right';
+}
+
+// Alterna a legenda para o próximo canto
+function cycleLegendPos(){
+  const img = images.find(i=> i.id===currentId);
+  if(!img) return;
+  const i = CANTOS.indexOf(img.legendPos || 'br');
+  img.legendPos = CANTOS[(i+1) % CANTOS.length];
+  lastLegendPos = img.legendPos;
+  updateLegendBtn(img.legendPos);
+  positionDensBox();
+}
+
+// O ícone do botão mostra em qual canto a legenda está
+function updateLegendBtn(pos){
+  const mark = $('legendMark');
+  if(!mark) return;
+  mark.setAttribute('x', (pos==='bl' || pos==='tl') ? '2' : '11');
+  mark.setAttribute('y', (pos==='tl' || pos==='tr') ? '2' : '8');
 }
 
 function currentValues(){
@@ -693,7 +769,8 @@ function compute(){
   }else{
     hide(densBox);
   }
-  $('saveBtn').disabled = !Number.isFinite(dens);
+  positionDensBox();
+  $('btnSaveBack').disabled = !Number.isFinite(dens);
 }
 
 // unidades: apenas inteiros
@@ -702,11 +779,11 @@ inpUnid.addEventListener('input', ()=>{
   compute();
 });
 inpArea.addEventListener('input', compute);
-// Enter na área foca o botão salvar
-inpArea.addEventListener('keydown', e=>{ if(e.key==='Enter' && !$('saveBtn').disabled) $('saveBtn').focus(); });
+// Enter na área foca o botão de salvar
+inpArea.addEventListener('keydown', e=>{ if(e.key==='Enter' && !$('btnSaveBack').disabled) $('btnSaveBack').focus(); });
 
 /* ===================== DESENHAR A CAIXA NO CANVAS (para gravar) ===================== */
-function drawBox(ctx, W, H, und, area, dens){
+function drawBox(ctx, W, H, und, area, dens, pos){
   const line1 = 'DENSIDADE ' + fmtDens(dens);
   const line2 = `${fmtInt(und)} ÷ ${fmtArea(area)} = ${fmtDens(dens)}`;
   const fs = Math.max(14, Math.min(W*0.020, 46));   // "pequeno, porém legível"
@@ -723,8 +800,11 @@ function drawBox(ctx, W, H, und, area, dens){
   const boxW = Math.ceil(Math.max(w1,w2) + pad*2);
   const boxH = Math.ceil(pad*2 + lineH*2 + gap);
   const margin = Math.max(8, Math.round(W*0.012));
-  const x = W - boxW - margin;
-  const y = H - boxH - margin;
+  // mesmo canto escolhido na prévia
+  const daEsquerda = (pos === 'bl' || pos === 'tl');
+  const doTopo     = (pos === 'tl' || pos === 'tr');
+  const x = daEsquerda ? margin : (W - boxW - margin);
+  const y = doTopo     ? margin : (H - boxH - margin);
 
   const b = Math.max(2, Math.round(fs*0.12)); // borda branca
   ctx.fillStyle = '#fff'; ctx.fillRect(x-b, y-b, boxW+2*b, boxH+2*b);
@@ -742,7 +822,7 @@ async function burnImage(img, und, area, dens){
   const ctx = canvas.getContext('2d');
   ctx.drawImage(bmp, 0, 0);
   bmp.close && bmp.close();
-  drawBox(ctx, canvas.width, canvas.height, und, area, dens);
+  drawBox(ctx, canvas.width, canvas.height, und, area, dens, img.legendPos || 'br');
   let type = (img.type && /^image\/(png|jpeg|webp)$/.test(img.type)) ? img.type : 'image/png';
   const q = (type==='image/jpeg'||type==='image/webp') ? 0.95 : undefined;
   return await new Promise(res => canvas.toBlob(res, type, q));
@@ -756,18 +836,19 @@ async function ensureWritable(handle){
 }
 
 /* ===================== SALVAR (sobrescrever) ===================== */
+// Devolve true só se gravou de fato — quem chama decide se volta para a lista.
 async function saveCurrent(){
   const img = images.find(i=> i.id===currentId);
-  if(!img) return;
+  if(!img) return false;
   const { und, area, dens } = currentValues();
-  if(!Number.isFinite(dens)){ toast('Preencha unidades e área (área ≠ 0).'); return; }
+  if(!Number.isFinite(dens)){ toast('Preencha unidades e área (área ≠ 0).'); return false; }
 
-  const btn = $('saveBtn'); btn.disabled = true;
+  const btn = $('btnSaveBack'); btn.disabled = true;
   try{
     const blob = await burnImage(img, und, area, dens);
 
     if(FS_OK && img.handle){
-      if(!(await ensureWritable(img.handle))){ toast('Permissão de gravação negada.'); return; }
+      if(!(await ensureWritable(img.handle))){ toast('Permissão de gravação negada.'); return false; }
       const w = await img.handle.createWritable();
       await w.write(blob);
       await w.close();
@@ -786,11 +867,18 @@ async function saveCurrent(){
     img.annotated = true; img.unid = und; img.area = area; img.dens = dens;
     URL.revokeObjectURL(img.thumbUrl);
     img.thumbUrl = URL.createObjectURL(blob);
+    return true;
   }catch(err){
     toast('Erro ao salvar: ' + err.message);
+    return false;
   }finally{
     btn.disabled = false;
   }
+}
+
+// Só volta para a lista se a gravação deu certo — se falhar, você não perde o que digitou.
+async function saveAndBack(){
+  if(await saveCurrent()) closeViewer();
 }
 
 /* ===================== LIGAÇÕES DE BOTÕES ===================== */
@@ -805,8 +893,9 @@ $('btnLimpar').addEventListener('click', ()=>{
   const img = images.find(i=> i.id===principalId);
   if(img && img.markers && img.markers.length){ img.markers = []; renderPrincipal(); }
 });
-$('btnBack').addEventListener('click', closeViewer);
-$('saveBtn').addEventListener('click', saveCurrent);
+$('btnSaveBack').addEventListener('click', saveAndBack);
+$('btnCancel').addEventListener('click', closeViewer);
+$('btnLegendPos').addEventListener('click', cycleLegendPos);
 
 /* ===================== COMPATIBILIDADE ===================== */
 (function checkEnv(){
