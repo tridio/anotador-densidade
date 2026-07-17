@@ -113,7 +113,10 @@
     width:50%; min-width:0; border-right:3px solid var(--line);
     display:flex; flex-direction:column;
   }
-  #rightPane{ width:50%; min-width:0; display:flex; flex-direction:column; }
+  /* Sem imagem de referência, o lado direito ocupa a tela toda */
+  #rightPane{ flex:1; min-width:0; display:flex; flex-direction:column; }
+  #screen-work:not(.com-ref) #rightPane{ width:100%; }
+  #screen-work.com-ref #rightPane{ width:50%; flex:none; }
 
   .pane-head{
     display:flex; align-items:center; gap:10px;
@@ -157,20 +160,25 @@
      altura definida e a imagem cabe de verdade (inclusive em retrato). */
   #viewerImg{ display:block; max-width:100%; max-height:100%; }
 
-  /* Caixa preta da densidade — prévia ao vivo, posicionada por JS num dos 4 cantos */
-  #densBox{
+  /* Legenda: mesma proporção da que será gravada (tudo em em, escalado por JS),
+     para o que você arrasta ser o que sai no arquivo. */
+  .legend{
     position:absolute;
     background:#000; color:#fff;
-    border:2px solid #fff;
-    padding:4px 7px;
+    border:0.12em solid #fff;
+    padding:0.55em;
     font-family:var(--mono);
-    line-height:1.25;
-    pointer-events:none;
-    max-width:80%;
+    line-height:1.2;
+    white-space:nowrap;
+    cursor:grab;
     z-index:4;
+    touch-action:none;         /* deixa o pointermove chegar até nós */
+    user-select:none;
   }
-  #densBox .l1{ font-weight:700; font-size:12px; letter-spacing:1px; }
-  #densBox .l2{ font-size:12px; }
+  .legend.arrastando{ cursor:grabbing; outline:0.12em dashed #fff; outline-offset:0.12em; }
+  .legend.pendente{ box-shadow:0 0 0 0.12em #000, 0 0 0 0.24em #fff; }  /* a que está sendo editada */
+  .legend .l1{ font-weight:700; letter-spacing:0.05em; }
+  .legend .l2{ margin-top:0.25em; }
 
   /* Controles (inputs) abaixo da imagem */
   #controls{
@@ -218,6 +226,20 @@
   }
   #dropzone .dz small{ display:block; font-size:12px; letter-spacing:1px; opacity:.75; text-transform:none; margin-top:8px; }
   .droptip{ font-size:13px; opacity:.7; }
+
+  /* Menu de contexto da miniatura */
+  #ctxMenu{
+    position:fixed; z-index:80;
+    background:#000; border:3px solid #fff;
+    display:flex; flex-direction:column; min-width:210px;
+  }
+  #ctxMenu button{
+    background:#000; color:#fff; border:0; border-bottom:2px solid #fff;
+    text-align:left; padding:10px 12px; font-size:12px;
+  }
+  #ctxMenu button:last-child{ border-bottom:0; }
+  #ctxMenu button:hover:not(:disabled){ background:#fff; color:#000; }
+  #ctxMenu button:disabled{ opacity:.35; cursor:not-allowed; background:#000; color:#fff; }
 </style>
 
 <!-- Overlay exibido enquanto arrasta arquivos sobre a janela -->
@@ -226,6 +248,12 @@
     Solte as imagens aqui
     <small>Aceita arquivos soltos ou uma pasta inteira</small>
   </div>
+</div>
+
+<!-- Menu de contexto da miniatura (botão direito) -->
+<div id="ctxMenu" class="hidden">
+  <button id="ctxRef">◧ Definir como referência</button>
+  <button id="ctxDesfazer">↺ Desfazer legenda</button>
 </div>
 
 <div id="app">
@@ -251,13 +279,14 @@
     </div>
   </section>
 
-  <!-- ===================== ESCOLHER PRINCIPAL ===================== -->
+  <!-- ============ ESCOLHER A IMAGEM DE REFERÊNCIA (opcional) ============ -->
   <section id="screen-choose" class="hidden">
     <div class="topbar">
-      <h2>Escolha a imagem principal</h2>
+      <h2>Escolha a imagem de referência</h2>
       <div class="spacer"></div>
       <button class="ghost" id="btnAddChoose">＋ Adicionar imagens</button>
       <button class="ghost" id="btnDirChoose">📁 Pasta</button>
+      <button class="ghost" id="btnCancelChoose">✕ Cancelar</button>
     </div>
     <div class="hint">Clique na imagem que ficará fixa à esquerda como <b>referência</b>.</div>
     <div id="grid-choose" class="grid"></div>
@@ -265,25 +294,27 @@
 
   <!-- ===================== ÁREA DE TRABALHO ===================== -->
   <section id="screen-work" class="hidden">
-    <!-- Metade esquerda: imagem principal -->
-    <div id="leftPane">
+    <!-- Metade esquerda: imagem de referência (só existe se você escolher uma) -->
+    <div id="leftPane" class="hidden">
       <div class="pane-head">
-        <h3>Principal (referência)</h3>
+        <h3>Referência</h3>
         <div class="spacer"></div>
         <button class="ghost" id="btnLimpar">Limpar pontos</button>
         <button class="ghost" id="btnTrocar">Trocar</button>
+        <button class="ghost" id="btnRemoverRef" title="Voltar a usar a tela inteira">✕</button>
       </div>
       <div class="pane-hint">Clique na imagem para marcar um ponto já trabalhado. Clique na bolinha para removê-la.</div>
-      <div id="principalStage"><div class="empty">Nenhuma imagem principal.</div></div>
+      <div id="principalStage"><div class="empty">Nenhuma imagem de referência.</div></div>
     </div>
 
-    <!-- Metade direita: miniaturas OU visualizador -->
+    <!-- Lado direito (ou tela inteira, se não houver referência) -->
     <div id="rightPane">
       <!-- Sub-tela: grade -->
       <div id="grid-view" style="display:flex; flex-direction:column; min-height:0; flex:1;">
         <div class="pane-head">
           <h3>Imagens — clique para anotar</h3>
           <div class="spacer"></div>
+          <button class="ghost" id="btnEscolherRef">◧ Escolher imagem de referência</button>
           <button class="ghost" id="btnAddWork">＋ Adicionar</button>
           <button class="ghost" id="btnDirWork">📁 Pasta</button>
         </div>
@@ -305,15 +336,17 @@
           </button>
           <h3 id="viewerName" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></h3>
           <div class="spacer"></div>
+          <button class="ghost" id="btnDesfazer" title="Regravar o arquivo com a imagem original, sem legendas">↺ Desfazer legendas</button>
           <button class="ghost" id="btnCancel" title="Voltar à lista sem gravar nada">✕ Cancelar</button>
+        </div>
+        <div class="pane-hint" id="viewerHint">
+          Preencha unidades e área para criar uma legenda; <b>arraste-a</b> até o ponto desejado
+          para fixá-la e liberar a próxima.
         </div>
 
         <div id="imgStage">
           <img id="viewerImg" alt="">
-          <div id="densBox" class="hidden">
-            <div class="l1"></div>
-            <div class="l2"></div>
-          </div>
+          <!-- as legendas são criadas aqui por JS, uma por medição -->
         </div>
 
         <div id="controls">
@@ -527,8 +560,9 @@ async function onDrop(e){
 
 function afterLoad(){
   if(images.length===0) return;
-  if(principalId==null){ goChoose(); }
-  else { renderWorkGrid(); renderPrincipal(); }
+  // Vai direto trabalhar: a imagem de referência é opcional, escolhida pelo botão.
+  if(scrChoose.classList.contains('hidden')) goWork();
+  else renderChooseGrid();
 }
 
 /* Lê os bytes originais para memória (estável mesmo após sobrescrever o disco) */
@@ -542,6 +576,7 @@ async function ensureBlob(img){
 }
 
 /* ===================== NAVEGAÇÃO DE TELAS ===================== */
+// Escolher a imagem de referência é OPCIONAL: só se chega aqui pelo botão.
 function goChoose(){
   hide(scrStart); hide(scrWork); show(scrChoose);
   renderChooseGrid();
@@ -549,7 +584,12 @@ function goChoose(){
 function goWork(){
   hide(scrStart); hide(scrChoose); show(scrWork);
   show(gridView); hide(viewer);
-  renderPrincipal(); renderWorkGrid();
+  const temRef = principalId != null && images.some(i=> i.id===principalId);
+  if(!temRef) principalId = null;
+  scrWork.classList.toggle('com-ref', temRef);   // sem referência, o lado direito toma a tela toda
+  if(temRef){ show($('leftPane')); renderPrincipal(); }
+  else       { hide($('leftPane')); }
+  renderWorkGrid();
 }
 
 /* ===================== RENDER: grade de escolha ===================== */
@@ -558,11 +598,11 @@ function renderChooseGrid(){
   g.innerHTML='';
   images.forEach(img=>{
     g.appendChild(makeThumb(img, ()=> setPrincipal(img.id),
-      img.id===principalId ? 'PRINCIPAL' : null));
+      img.id===principalId ? 'REFERÊNCIA' : null));
   });
 }
 
-/* ===================== RENDER: grade de trabalho (painel direito) ===================== */
+/* ===================== RENDER: grade de trabalho ===================== */
 function renderWorkGrid(){
   const g = $('grid-work');
   g.innerHTML='';
@@ -585,6 +625,7 @@ function makeThumb(img, onClick, flag){
     (flag ? `<div class="flag">${flag}</div>` : '') +
     `<div class="name">${escapeHtml(img.name)}</div>`;
   d.addEventListener('click', onClick);
+  d.addEventListener('contextmenu', (ev)=> abrirCtxMenu(ev, img));
   return d;
 }
 function escapeHtml(s){ return s.replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -655,99 +696,157 @@ function positionMarkers(stage, el, img){
   });
 }
 
-/* ===================== VISUALIZADOR (imagem inteira + inputs) ===================== */
+/* ===================== VISUALIZADOR (imagem inteira + legendas) =====================
+   Cada imagem guarda uma lista de legendas: img.legends = [{und, area, dens, canto, x, y}].
+   Enquanto uma legenda é "pendente", ela é a que os inputs editam e fica presa a um canto
+   (assim ela cresce para dentro conforme o texto muda, em vez de vazar da imagem).
+   Ao ser ARRASTADA, ela ganha x/y livres, é fixada, e os inputs zeram para a próxima. */
 const inpUnid = $('inpUnid'), inpArea = $('inpArea'), inpDens = $('inpDens');
-const densBox = $('densBox');
 const viewerImg = $('viewerImg');
+const imgStage  = $('imgStage');
 
-// Cantos possíveis para a legenda, na ordem em que o botão alterna
-const CANTOS = ['br','bl','tl','tr'];
-let lastLegendPos = 'br';   // lembra a última escolha e usa como padrão na próxima imagem
-let viewerRO = null;        // reposiciona a legenda quando o painel muda de tamanho
+const CANTOS = ['br','bl','tl','tr'];   // onde uma legenda NOVA nasce
+let lastLegendPos = 'br';
+let pendingIdx = -1;                    // índice da legenda ligada aos inputs (-1 = nenhuma)
+let viewerRO = null;
+
+const legendsOf = img => (img.legends || (img.legends = []));
 
 async function openViewer(id){
   currentId = id;
   const img = images.find(i=> i.id===id);
   if(!img) return;
   $('viewerName').textContent = img.name;
-
-  if(!img.legendPos) img.legendPos = lastLegendPos;
-  updateLegendBtn(img.legendPos);
+  legendsOf(img);
+  pendingIdx = -1;
+  updateLegendBtn(lastLegendPos);
 
   const blob = await ensureBlob(img);
   const url = URL.createObjectURL(blob);
   viewerImg.addEventListener('load', function onLoad(){
     viewerImg.removeEventListener('load', onLoad);
     URL.revokeObjectURL(url);
-    positionDensBox();
+    renderLegends();
   });
   viewerImg.src = url;
 
-  // restaura valores já anotados, se houver
-  inpUnid.value = img.unid!=null ? String(img.unid) : '';
-  inpArea.value = img.area!=null ? String(img.area).replace('.', ',') : '';
+  inpUnid.value = ''; inpArea.value = '';   // toda imagem começa pronta para uma legenda nova
   compute();
+  updateDesfazerBtn();
 
   hide(gridView); show(viewer);
 
   if(viewerRO) viewerRO.disconnect();
-  viewerRO = new ResizeObserver(positionDensBox);
-  viewerRO.observe($('imgStage'));
+  viewerRO = new ResizeObserver(renderLegends);
+  viewerRO.observe(imgStage);
 
-  setTimeout(()=>{ inpUnid.focus(); inpUnid.select(); }, 30);
+  setTimeout(()=>{ inpUnid.focus(); }, 30);
 }
 
 function closeViewer(){
   if(viewerRO){ viewerRO.disconnect(); viewerRO = null; }
+  descartarPendente();
   hide(viewer); show(gridView);
   renderWorkGrid();
   currentId = null;
 }
 
-/* Ancora a caixa da legenda no canto escolhido DA IMAGEM (não do painel),
-   medindo o retângulo real da imagem — assim vale para qualquer proporção. */
-function positionDensBox(){
+function updateDesfazerBtn(){
   const img = images.find(i=> i.id===currentId);
-  if(!img || densBox.classList.contains('hidden')) return;
-  const stage = $('imgStage');
-  const sr = stage.getBoundingClientRect();
-  const ir = viewerImg.getBoundingClientRect();
-  if(!ir.width || !ir.height) return;
-
-  const inset = 8;
-  const esq  = (ir.left   - sr.left)   + inset;   // distâncias até cada borda da imagem
-  const dir  = (sr.right  - ir.right)  + inset;
-  const topo = (ir.top    - sr.top)    + inset;
-  const base = (sr.bottom - ir.bottom) + inset;
-
-  const pos = img.legendPos || 'br';
-  const daEsquerda = (pos === 'bl' || pos === 'tl');
-  const doTopo     = (pos === 'tl' || pos === 'tr');
-
-  densBox.style.left   = daEsquerda ? esq + 'px' : 'auto';
-  densBox.style.right  = daEsquerda ? 'auto' : dir + 'px';
-  densBox.style.top    = doTopo ? topo + 'px' : 'auto';
-  densBox.style.bottom = doTopo ? 'auto' : base + 'px';
-  densBox.style.textAlign = daEsquerda ? 'left' : 'right';
+  // só dá para desfazer o que foi gravado NESTA sessão: é quando o original ainda está em memória
+  $('btnDesfazer').disabled = !(img && img.annotated);
 }
 
-// Alterna a legenda para o próximo canto
-function cycleLegendPos(){
+/* ---- geometria: o retângulo real da imagem dentro do palco ---- */
+function imgBox(){
+  const sr = imgStage.getBoundingClientRect();
+  const ir = viewerImg.getBoundingClientRect();
+  return { ox: ir.left - sr.left, oy: ir.top - sr.top, w: ir.width, h: ir.height,
+           escala: viewerImg.naturalWidth ? ir.width / viewerImg.naturalWidth : 1 };
+}
+// mesma fórmula usada na gravação (drawLegend), para a prévia bater com o arquivo
+const fonteNatural = W => Math.max(14, Math.min(W*0.020, 46));
+const margemNatural = W => Math.max(8, Math.round(W*0.012));
+
+/* ---- desenha as legendas sobre a imagem ---- */
+function renderLegends(){
+  imgStage.querySelectorAll('.legend').forEach(e=> e.remove());
   const img = images.find(i=> i.id===currentId);
   if(!img) return;
-  const i = CANTOS.indexOf(img.legendPos || 'br');
-  img.legendPos = CANTOS[(i+1) % CANTOS.length];
-  lastLegendPos = img.legendPos;
-  updateLegendBtn(img.legendPos);
-  positionDensBox();
+  const b = imgBox();
+  if(!b.w || !b.h) return;
+
+  const fs = Math.max(8, fonteNatural(viewerImg.naturalWidth) * b.escala); // piso p/ não sumir
+  const mg = margemNatural(viewerImg.naturalWidth) * b.escala;
+
+  legendsOf(img).forEach((leg, i)=>{
+    const el = document.createElement('div');
+    el.className = 'legend' + (i===pendingIdx ? ' pendente' : '');
+    el.style.fontSize = fs + 'px';
+    el.innerHTML = `<div class="l1">DENSIDADE ${fmtDens(leg.dens)}</div>` +
+                   `<div class="l2">${fmtInt(leg.und)} ÷ ${fmtArea(leg.area)} = ${fmtDens(leg.dens)}</div>`;
+    el.title = 'Arraste para posicionar';
+    imgStage.appendChild(el);
+
+    if(leg.x==null){                        // ainda presa a um canto
+      const esq = (leg.canto==='bl'||leg.canto==='tl');
+      const top = (leg.canto==='tl'||leg.canto==='tr');
+      el.style.left   = esq ? (b.ox + mg) + 'px' : 'auto';
+      el.style.right  = esq ? 'auto' : (imgStage.clientWidth - (b.ox + b.w) + mg) + 'px';
+      el.style.top    = top ? (b.oy + mg) + 'px' : 'auto';
+      el.style.bottom = top ? 'auto' : (imgStage.clientHeight - (b.oy + b.h) + mg) + 'px';
+    }else{                                  // posição livre (já foi arrastada)
+      el.style.left = (b.ox + leg.x * b.w) + 'px';
+      el.style.top  = (b.oy + leg.y * b.h) + 'px';
+      el.style.right = 'auto'; el.style.bottom = 'auto';
+    }
+    tornarArrastavel(el, img, leg);
+  });
 }
 
-// O ícone do botão mostra em qual canto a legenda está
-function updateLegendBtn(pos){
-  const mark = $('legendMark');
-  if(!mark) return;
-  mark.setAttribute('x', (pos==='bl' || pos==='tl') ? '2' : '11');
-  mark.setAttribute('y', (pos==='tl' || pos==='tr') ? '2' : '8');
+/* ---- arrastar: fixa a legenda e libera a próxima ---- */
+function tornarArrastavel(el, img, leg){
+  el.addEventListener('pointerdown', (ev)=>{
+    ev.preventDefault();
+    const b = imgBox();
+    const r = el.getBoundingClientRect();
+    const sr = imgStage.getBoundingClientRect();
+    const dx = ev.clientX - r.left, dy = ev.clientY - r.top;   // pega onde o cursor segurou
+    el.setPointerCapture(ev.pointerId);
+    el.classList.add('arrastando');
+    let moveu = false;
+
+    const mover = (e)=>{
+      moveu = true;
+      // canto superior esquerdo, em px relativos ao palco, preso dentro da imagem
+      let px = (e.clientX - sr.left) - dx;
+      let py = (e.clientY - sr.top ) - dy;
+      px = Math.min(Math.max(px, b.ox), b.ox + b.w - r.width);
+      py = Math.min(Math.max(py, b.oy), b.oy + b.h - r.height);
+      el.style.left = px+'px'; el.style.top = py+'px';
+      el.style.right='auto'; el.style.bottom='auto';
+      leg.x = (px - b.ox) / b.w;
+      leg.y = (py - b.oy) / b.h;
+    };
+    const soltar = ()=>{
+      el.removeEventListener('pointermove', mover);
+      el.removeEventListener('pointerup', soltar);
+      el.removeEventListener('pointercancel', soltar);
+      el.classList.remove('arrastando');
+      if(!moveu) return;                         // clique sem mover não fixa nada
+      const i = legendsOf(img).indexOf(leg);
+      if(i === pendingIdx){                      // fixou a legenda que estava sendo editada
+        pendingIdx = -1;
+        inpUnid.value=''; inpArea.value=''; inpDens.value='';
+        el.classList.remove('pendente');
+        $('btnSaveBack').disabled = legendsOf(img).length===0;
+        setTimeout(()=> inpUnid.focus(), 0);
+      }
+    };
+    el.addEventListener('pointermove', mover);
+    el.addEventListener('pointerup', soltar);
+    el.addEventListener('pointercancel', soltar);
+  });
 }
 
 function currentValues(){
@@ -758,19 +857,54 @@ function currentValues(){
   return { und, area, dens };
 }
 
+// Some com a legenda pendente (inputs incompletos / saiu da tela sem arrastar)
+function descartarPendente(){
+  const img = images.find(i=> i.id===currentId);
+  if(img && pendingIdx>=0) legendsOf(img).splice(pendingIdx,1);
+  pendingIdx = -1;
+}
+
+// Alterna o canto onde uma legenda NOVA nasce (e move a pendente, se houver)
+function cycleLegendPos(){
+  const i = CANTOS.indexOf(lastLegendPos);
+  lastLegendPos = CANTOS[(i+1) % CANTOS.length];
+  updateLegendBtn(lastLegendPos);
+  const img = images.find(i2=> i2.id===currentId);
+  if(img && pendingIdx>=0){
+    const leg = legendsOf(img)[pendingIdx];
+    leg.canto = lastLegendPos; leg.x = null; leg.y = null;   // volta a ficar presa ao canto
+  }
+  renderLegends();
+}
+
+function updateLegendBtn(pos){
+  const mark = $('legendMark');
+  if(!mark) return;
+  mark.setAttribute('x', (pos==='bl' || pos==='tl') ? '2' : '11');
+  mark.setAttribute('y', (pos==='tl' || pos==='tr') ? '2' : '8');
+}
+
 function compute(){
   const { und, area, dens } = currentValues();
   inpDens.value = Number.isFinite(dens) ? fmtDens(dens) : '';
-  // atualiza a caixa preta ao vivo
-  if(Number.isFinite(dens)){
-    densBox.querySelector('.l1').textContent = 'DENSIDADE ' + fmtDens(dens);
-    densBox.querySelector('.l2').textContent = `${fmtInt(und)} ÷ ${fmtArea(area)} = ${fmtDens(dens)}`;
-    show(densBox);
-  }else{
-    hide(densBox);
+  const img = images.find(i=> i.id===currentId);
+  if(img){
+    const legs = legendsOf(img);
+    if(Number.isFinite(dens)){
+      if(pendingIdx < 0){                       // primeira digitação: nasce uma legenda nova
+        legs.push({ und, area, dens, canto:lastLegendPos, x:null, y:null });
+        pendingIdx = legs.length - 1;
+      }else{
+        Object.assign(legs[pendingIdx], { und, area, dens });
+      }
+    }else if(pendingIdx >= 0){                  // apagou os inputs: a pendente some
+      legs.splice(pendingIdx, 1);
+      pendingIdx = -1;
+    }
+    renderLegends();
+    // dá para salvar assim que existir ao menos uma legenda (fixada ou pendente)
+    $('btnSaveBack').disabled = legs.length === 0;
   }
-  positionDensBox();
-  $('btnSaveBack').disabled = !Number.isFinite(dens);
 }
 
 // unidades: apenas inteiros
@@ -782,11 +916,11 @@ inpArea.addEventListener('input', compute);
 // Enter na área foca o botão de salvar
 inpArea.addEventListener('keydown', e=>{ if(e.key==='Enter' && !$('btnSaveBack').disabled) $('btnSaveBack').focus(); });
 
-/* ===================== DESENHAR A CAIXA NO CANVAS (para gravar) ===================== */
-function drawBox(ctx, W, H, und, area, dens, pos){
-  const line1 = 'DENSIDADE ' + fmtDens(dens);
-  const line2 = `${fmtInt(und)} ÷ ${fmtArea(area)} = ${fmtDens(dens)}`;
-  const fs = Math.max(14, Math.min(W*0.020, 46));   // "pequeno, porém legível"
+/* ===================== DESENHAR A LEGENDA NO CANVAS (para gravar) ===================== */
+function drawLegend(ctx, W, H, leg){
+  const line1 = 'DENSIDADE ' + fmtDens(leg.dens);
+  const line2 = `${fmtInt(leg.und)} ÷ ${fmtArea(leg.area)} = ${fmtDens(leg.dens)}`;
+  const fs = fonteNatural(W);                       // "pequeno, porém legível"
   const pad = Math.round(fs*0.55);
   const gap = Math.round(fs*0.25);
   const lineH = Math.round(fs*1.2);
@@ -799,12 +933,20 @@ function drawBox(ctx, W, H, und, area, dens, pos){
 
   const boxW = Math.ceil(Math.max(w1,w2) + pad*2);
   const boxH = Math.ceil(pad*2 + lineH*2 + gap);
-  const margin = Math.max(8, Math.round(W*0.012));
-  // mesmo canto escolhido na prévia
-  const daEsquerda = (pos === 'bl' || pos === 'tl');
-  const doTopo     = (pos === 'tl' || pos === 'tr');
-  const x = daEsquerda ? margin : (W - boxW - margin);
-  const y = doTopo     ? margin : (H - boxH - margin);
+  const margin = margemNatural(W);
+
+  let x, y;
+  if(leg.x == null){                                // presa a um canto
+    const daEsquerda = (leg.canto==='bl' || leg.canto==='tl');
+    const doTopo     = (leg.canto==='tl' || leg.canto==='tr');
+    x = daEsquerda ? margin : (W - boxW - margin);
+    y = doTopo     ? margin : (H - boxH - margin);
+  }else{                                            // posicionada com o mouse
+    x = Math.round(leg.x * W);
+    y = Math.round(leg.y * H);
+  }
+  x = Math.min(Math.max(x, 0), Math.max(0, W - boxW));   // nunca vaza da imagem
+  y = Math.min(Math.max(y, 0), Math.max(0, H - boxH));
 
   const b = Math.max(2, Math.round(fs*0.12)); // borda branca
   ctx.fillStyle = '#fff'; ctx.fillRect(x-b, y-b, boxW+2*b, boxH+2*b);
@@ -921,7 +1063,7 @@ function pngCopiarMetadados(orig, novo){
   return out;
 }
 
-async function burnImage(img, und, area, dens){
+async function burnImage(img){
   const src = await ensureBlob(img);            // sempre a partir do ORIGINAL (evita legenda dupla)
   // 'from-image' garante que a rotação do EXIF entre nos pixels — senão a legenda
   // seria desenhada no canto errado e virada, já que o EXIF é descartado na regravação.
@@ -931,7 +1073,7 @@ async function burnImage(img, und, area, dens){
   const ctx = canvas.getContext('2d');
   ctx.drawImage(bmp, 0, 0);
   bmp.close && bmp.close();
-  drawBox(ctx, canvas.width, canvas.height, und, area, dens, img.legendPos || 'br');
+  legendsOf(img).forEach(leg => drawLegend(ctx, canvas.width, canvas.height, leg));
   let type = (img.type && /^image\/(png|jpeg|webp)$/.test(img.type)) ? img.type : 'image/png';
   const q = (type==='image/jpeg'||type==='image/webp') ? 0.95 : undefined;
   const blob = await new Promise(res => canvas.toBlob(res, type, q));
@@ -961,12 +1103,11 @@ async function ensureWritable(handle){
 async function saveCurrent(){
   const img = images.find(i=> i.id===currentId);
   if(!img) return false;
-  const { und, area, dens } = currentValues();
-  if(!Number.isFinite(dens)){ toast('Preencha unidades e área (área ≠ 0).'); return false; }
+  if(legendsOf(img).length === 0){ toast('Preencha unidades e área (área ≠ 0).'); return false; }
 
   const btn = $('btnSaveBack'); btn.disabled = true;
   try{
-    const blob = await burnImage(img, und, area, dens);
+    const blob = await burnImage(img);
 
     if(FS_OK && img.handle){
       if(!(await ensureWritable(img.handle))){ toast('Permissão de gravação negada.'); return false; }
@@ -985,9 +1126,10 @@ async function saveCurrent(){
     }
 
     // marca como anotado e atualiza miniatura para a versão salva
-    img.annotated = true; img.unid = und; img.area = area; img.dens = dens;
+    img.annotated = true;
     URL.revokeObjectURL(img.thumbUrl);
     img.thumbUrl = URL.createObjectURL(blob);
+    updateDesfazerBtn();
     return true;
   }catch(err){
     toast('Erro ao salvar: ' + err.message);
@@ -1002,6 +1144,71 @@ async function saveAndBack(){
   if(await saveCurrent()) closeViewer();
 }
 
+/* ===================== DESFAZER LEGENDAS =====================
+   Só funciona para o que foi gravado nesta sessão: aí o original ainda está
+   em memória (img.blob) e é regravado por cima, byte a byte — o que também
+   devolve os metadados originais intactos, já que é o arquivo original. */
+async function undoLegends(id){
+  const img = images.find(i=> i.id===id);
+  if(!img) return false;
+  if(!img.annotated){ toast('Esta imagem não foi gravada nesta sessão.'); return false; }
+  try{
+    const orig = await ensureBlob(img);
+    if(FS_OK && img.handle){
+      if(!(await ensureWritable(img.handle))){ toast('Permissão de gravação negada.'); return false; }
+      const w = await img.handle.createWritable();
+      await w.write(orig);
+      await w.close();
+      toast('↺ Legendas desfeitas: ' + img.name);
+    }else{
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(orig);
+      a.download = img.name;
+      a.click();
+      setTimeout(()=> URL.revokeObjectURL(a.href), 4000);
+      toast('Original baixado (navegador não permite sobrescrever).');
+    }
+    img.legends = [];
+    img.annotated = false;
+    pendingIdx = -1;
+    URL.revokeObjectURL(img.thumbUrl);
+    img.thumbUrl = URL.createObjectURL(orig);
+    if(currentId === id){
+      inpUnid.value=''; inpArea.value=''; inpDens.value='';
+      compute(); updateDesfazerBtn();
+    }
+    renderWorkGrid();
+    return true;
+  }catch(err){
+    toast('Erro ao desfazer: ' + err.message);
+    return false;
+  }
+}
+
+/* ===================== MENU DE CONTEXTO DA MINIATURA ===================== */
+const ctxMenu = $('ctxMenu');
+let ctxId = null;
+
+function abrirCtxMenu(ev, img){
+  ev.preventDefault();
+  ctxId = img.id;
+  $('ctxDesfazer').disabled = !img.annotated;   // sem original em memória, não há o que desfazer
+  $('ctxRef').textContent = (img.id===principalId) ? '◧ Já é a referência' : '◧ Definir como referência';
+  $('ctxRef').disabled = (img.id===principalId);
+  show(ctxMenu);
+  // mantém o menu dentro da janela
+  const r = ctxMenu.getBoundingClientRect();
+  ctxMenu.style.left = Math.min(ev.clientX, innerWidth  - r.width  - 4) + 'px';
+  ctxMenu.style.top  = Math.min(ev.clientY, innerHeight - r.height - 4) + 'px';
+}
+function fecharCtxMenu(){ hide(ctxMenu); ctxId = null; }
+window.addEventListener('click', fecharCtxMenu);
+window.addEventListener('scroll', fecharCtxMenu, true);
+window.addEventListener('keydown', e=>{ if(e.key==='Escape') fecharCtxMenu(); });
+ctxMenu.addEventListener('click', e=> e.stopPropagation());
+$('ctxRef').addEventListener('click', ()=>{ const id=ctxId; fecharCtxMenu(); setPrincipal(id); });
+$('ctxDesfazer').addEventListener('click', ()=>{ const id=ctxId; fecharCtxMenu(); undoLegends(id); });
+
 /* ===================== LIGAÇÕES DE BOTÕES ===================== */
 $('btnPickDir').addEventListener('click', pickDirectory);
 $('btnPickFilesStart').addEventListener('click', pickFiles);
@@ -1009,7 +1216,10 @@ $('btnAddChoose').addEventListener('click', pickFiles);
 $('btnDirChoose').addEventListener('click', pickDirectory);
 $('btnAddWork').addEventListener('click', pickFiles);
 $('btnDirWork').addEventListener('click', pickDirectory);
+$('btnEscolherRef').addEventListener('click', goChoose);
+$('btnCancelChoose').addEventListener('click', goWork);
 $('btnTrocar').addEventListener('click', goChoose);
+$('btnRemoverRef').addEventListener('click', ()=>{ principalId = null; goWork(); });
 $('btnLimpar').addEventListener('click', ()=>{
   const img = images.find(i=> i.id===principalId);
   if(img && img.markers && img.markers.length){ img.markers = []; renderPrincipal(); }
@@ -1017,6 +1227,7 @@ $('btnLimpar').addEventListener('click', ()=>{
 $('btnSaveBack').addEventListener('click', saveAndBack);
 $('btnCancel').addEventListener('click', closeViewer);
 $('btnLegendPos').addEventListener('click', cycleLegendPos);
+$('btnDesfazer').addEventListener('click', ()=> undoLegends(currentId));
 
 /* ===================== COMPATIBILIDADE ===================== */
 (function checkEnv(){

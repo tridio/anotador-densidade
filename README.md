@@ -41,14 +41,31 @@ em vez de sobrescrever o original.
 1. **Selecionar pasta** (ou arraste uma pasta para a janela) — a permissão de gravação é pedida
    **uma única vez** e cobre todos os arquivos dela. Também dá para escolher/arrastar imagens avulsas,
    mas aí o navegador pede permissão uma vez por arquivo ao salvar.
-2. Clique na imagem que servirá de **referência**. Ela fica fixa na metade esquerda.
-3. Na metade direita, clique numa miniatura para abri-la.
-4. Preencha **unidades** (o foco já está lá) → **Tab** → **área** (aceita `,` ou `.`).
-   A densidade (`unidades ÷ área`) é calculada na hora.
-5. Se a legenda estiver cobrindo algo importante, o botão **Legenda** (canto inferior direito)
-   alterna entre os quatro cantos da foto. A última escolha vira o padrão da próxima imagem.
-6. **Salvar e voltar** sobrescreve a imagem com a legenda e volta para a lista.
-   **Cancelar** volta sem gravar nada, descartando o que foi digitado.
+2. Clique numa miniatura para abri-la.
+3. Preencha **unidades** (o foco já está lá) → **Tab** → **área** (aceita `,` ou `.`).
+   A densidade (`unidades ÷ área`) é calculada na hora e aparece como uma legenda sobre a imagem.
+4. **Arraste a legenda** até o ponto que ela deve marcar. Isso a fixa ali e **zera os campos**,
+   liberando a próxima: preencha de novo para criar outra legenda, quantas quiser na mesma imagem.
+5. **Salvar e voltar** grava todas as legendas na imagem e volta para a lista.
+   **Cancelar** volta sem gravar nada.
 
-Na imagem de referência à esquerda, clique para marcar com uma bolinha os pontos já trabalhados
-(clique na bolinha para removê-la). Essas marcações são só visuais e não são gravadas em nada.
+O botão **Legenda** define em que canto uma legenda nova nasce — útil quando o canto padrão cobre
+algo importante. A última escolha vira o padrão da próxima.
+
+### Imagem de referência (opcional)
+
+Se você tem uma imagem com informações que precisa consultar o tempo todo, use
+**Escolher imagem de referência** (ou o botão direito numa miniatura). Ela passa a ocupar a metade
+esquerda da tela, fixa. Sem isso, as miniaturas e a anotação ocupam a tela inteira.
+
+Na imagem de referência, clique para marcar com uma bolinha os pontos já trabalhados (clique na
+bolinha para removê-la). Essas marcações são só visuais e não são gravadas em nada.
+
+### Desfazer legendas
+
+Como o programa mantém a imagem original em memória, uma imagem gravada **nesta sessão** pode ser
+restaurada: use **Desfazer legendas** no visualizador, ou o botão direito na miniatura →
+**Desfazer legenda**. O arquivo original é regravado byte a byte, então os metadados voltam intactos.
+
+Isso só vale para o que foi salvo com o programa aberto. Se você fechar e reabrir, o arquivo já
+gravado passa a ser o "original" e não há mais o que desfazer — a opção aparece desabilitada.
