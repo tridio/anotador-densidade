@@ -265,7 +265,7 @@
     <h1>Anotador de Densidade</h1>
     <div class="sub">
       Selecione as imagens, escolha uma como referência principal e anote
-      <b>unidades</b>, <b>área</b> e a <b>densidade</b> calculada — gravando a legenda na própria imagem.
+      <b>unidades</b>, <b>área</b> e a <b>densidade</b> calculada — salvando uma cópia com o prefixo <b>audit_</b>.
     </div>
     <div class="startbtns">
       <button id="btnPickDir">📁 Selecionar pasta <span class="badge-rec">sem prompts</span></button>
@@ -274,8 +274,8 @@
     <div class="droptip">…ou <b>arraste</b> imagens — ou uma <b>pasta inteira</b> — para qualquer lugar da janela.</div>
     <div class="note" id="startNote">
       <b>Recomendado:</b> "Selecionar pasta" — ou <b>arrastar uma pasta</b> — pede permissão de gravação
-      <b>uma única vez</b> e depois sobrescreve os arquivos sem incomodar.
-      Imagens avulsas (botão ou arrastadas) pedem permissão por arquivo ao salvar.
+      <b>uma única vez</b> e salva cópias <b>audit_</b> na mesma pasta, mantendo os originais intactos.
+      Imagens avulsas (botão ou arrastadas) geram uma cópia por download.
     </div>
   </section>
 
@@ -324,7 +324,7 @@
       <!-- Sub-tela: visualizador -->
       <div id="viewer" class="hidden">
         <div class="pane-head">
-          <button id="btnSaveBack" title="Sobrescrever a imagem com a legenda e voltar à lista">
+          <button id="btnSaveBack" title="Salvar uma cópia audit_ com a legenda e voltar à lista">
             <svg class="ico" viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
               <rect x="1.2" y="1.2" width="13.6" height="13.6" fill="none" stroke="currentColor" stroke-width="1.6"/>
               <path d="M4 1.2 V5 H10.5 V1.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
@@ -336,7 +336,7 @@
           </button>
           <h3 id="viewerName" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></h3>
           <div class="spacer"></div>
-          <button class="ghost" id="btnDesfazer" title="Regravar o arquivo com a imagem original, sem legendas">↺ Desfazer legendas</button>
+          <button class="ghost" id="btnDesfazer" title="Remover as legendas da cópia audit_, preservando o original">↺ Desfazer legendas</button>
           <button class="ghost" id="btnCancel" title="Voltar à lista sem gravar nada">✕ Cancelar</button>
         </div>
         <div class="pane-hint" id="viewerHint">
@@ -417,11 +417,11 @@ function toast(msg, ms=2600){
 }
 
 /* ===================== CARREGAR IMAGENS ===================== */
-function addImage(name, type, file, handle){
+function addImage(name, type, file, handle, directory = null){
   // dedup simples por nome+tamanho
   if(images.some(i => i.name===name && i.file && file && i.file.size===file.size)) return null;
   const img = {
-    id: idSeq++, name, type: type || 'image/png', file, handle,
+    id: idSeq++, name, type: type || 'image/png', file, handle, directory, outputHandle: null, outputName: null,
     thumbUrl: URL.createObjectURL(file),
     blob: null, annotated:false, unid:null, area:null, dens:null
   };
@@ -436,7 +436,7 @@ async function pickDirectory(){
     for await (const entry of dir.values()){
       if(entry.kind==='file' && IMG_RE.test(entry.name)){
         const file = await entry.getFile();
-        if(addImage(entry.name, file.type, file, entry)) count++;
+        if(addImage(entry.name, file.type, file, entry, dir)) count++;
       }
     }
     if(count===0) toast('Nenhuma imagem encontrada na pasta.');
@@ -532,18 +532,18 @@ async function onDrop(e){
           for await (const entry of h.values()){
             if(entry.kind==='file' && IMG_RE.test(entry.name)){
               const file = await entry.getFile();
-              if(addImage(entry.name, file.type, file, entry)) count++;
+              if(addImage(entry.name, file.type, file, entry, h)) count++;
             }
           }
         }else if(h.kind === 'file' && IMG_RE.test(h.name)){
-          // Arquivo arrastado: vem com handle real, então dá para sobrescrever depois
+          // Arquivo avulso: a cópia anotada será baixada.
           const file = await h.getFile();
           if(addImage(h.name, file.type, file, h)) count++;
         }
       }
     }
     // Fallback: navegador sem File System Access, ou handles que vieram nulos.
-    // Carrega a imagem mesmo assim — só que salvar vira download em vez de sobrescrever.
+    // Sem acesso à pasta, salva a cópia por download.
     if(count === 0 && droppedFiles.length){
       for(const file of droppedFiles){
         if(IMG_RE.test(file.name) && addImage(file.name, file.type, file, null)) count++;
@@ -565,7 +565,7 @@ function afterLoad(){
   else renderChooseGrid();
 }
 
-/* Lê os bytes originais para memória (estável mesmo após sobrescrever o disco) */
+/* Mantém os bytes originais em memória para renderizar e desfazer legendas. */
 async function ensureBlob(img){
   if(!img.blob){
     const src = img.file || (img.handle ? await img.handle.getFile() : null);
@@ -1098,7 +1098,42 @@ async function ensureWritable(handle){
   return false;
 }
 
-/* ===================== SALVAR (sobrescrever) ===================== */
+/* Salva somente na cópia. Nomes existentes recebem um sufixo numérico. */
+async function writeAuditCopy(img, blob){
+  if(img.directory){
+    if(!(await ensureWritable(img.directory))) throw new Error('Permissão de gravação negada.');
+    if(!img.outputHandle){
+      const base = 'audit_' + img.name;
+      const dot = base.lastIndexOf('.');
+      const stem = dot > 0 ? base.slice(0, dot) : base;
+      const ext = dot > 0 ? base.slice(dot) : '';
+      let name = base;
+      for(let n = 1; ; n++){
+        try{ await img.directory.getFileHandle(name); }
+        catch(err){
+          if(err.name !== 'NotFoundError') throw err;
+          break;
+        }
+        name = `${stem}_${n}${ext}`;
+      }
+      img.outputHandle = await img.directory.getFileHandle(name, { create:true });
+      img.outputName = name;
+    }
+    const w = await img.outputHandle.createWritable();
+    await w.write(blob);
+    await w.close();
+    toast('✓ Cópia salva: ' + img.outputName);
+  }else{
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'audit_' + img.name;
+    a.click();
+    setTimeout(()=> URL.revokeObjectURL(a.href), 4000);
+    toast('✓ Cópia baixada: ' + a.download);
+  }
+}
+
+/* ===================== SALVAR CÓPIA ===================== */
 // Devolve true só se gravou de fato — quem chama decide se volta para a lista.
 async function saveCurrent(){
   const img = images.find(i=> i.id===currentId);
@@ -1109,21 +1144,7 @@ async function saveCurrent(){
   try{
     const blob = await burnImage(img);
 
-    if(FS_OK && img.handle){
-      if(!(await ensureWritable(img.handle))){ toast('Permissão de gravação negada.'); return false; }
-      const w = await img.handle.createWritable();
-      await w.write(blob);
-      await w.close();
-      toast('✓ Sobrescrito: ' + img.name);
-    }else{
-      // Fallback: baixar novo arquivo (não sobrescreve o original)
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = img.name;
-      a.click();
-      setTimeout(()=> URL.revokeObjectURL(a.href), 4000);
-      toast('Arquivo baixado (navegador não permite sobrescrever).');
-    }
+    await writeAuditCopy(img, blob);
 
     // marca como anotado e atualiza miniatura para a versão salva
     img.annotated = true;
@@ -1145,29 +1166,14 @@ async function saveAndBack(){
 }
 
 /* ===================== DESFAZER LEGENDAS =====================
-   Só funciona para o que foi gravado nesta sessão: aí o original ainda está
-   em memória (img.blob) e é regravado por cima, byte a byte — o que também
-   devolve os metadados originais intactos, já que é o arquivo original. */
+   Restaura os bytes originais apenas na cópia audit_ desta sessão. */
 async function undoLegends(id){
   const img = images.find(i=> i.id===id);
   if(!img) return false;
   if(!img.annotated){ toast('Esta imagem não foi gravada nesta sessão.'); return false; }
   try{
     const orig = await ensureBlob(img);
-    if(FS_OK && img.handle){
-      if(!(await ensureWritable(img.handle))){ toast('Permissão de gravação negada.'); return false; }
-      const w = await img.handle.createWritable();
-      await w.write(orig);
-      await w.close();
-      toast('↺ Legendas desfeitas: ' + img.name);
-    }else{
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(orig);
-      a.download = img.name;
-      a.click();
-      setTimeout(()=> URL.revokeObjectURL(a.href), 4000);
-      toast('Original baixado (navegador não permite sobrescrever).');
-    }
+    await writeAuditCopy(img, orig);
     img.legends = [];
     img.annotated = false;
     pendingIdx = -1;
@@ -1234,10 +1240,9 @@ $('btnDesfazer').addEventListener('click', ()=> undoLegends(currentId));
   const w = $('warn');
   if(!FS_OK){
     w.classList.remove('hidden');
-    w.innerHTML = '⚠ Este navegador não permite sobrescrever arquivos. Use <b>Chrome</b> ou <b>Edge</b> ' +
-                  'para gravar na própria imagem. Aqui o salvamento apenas <b>baixa</b> uma cópia.';
+    w.innerHTML = 'Neste navegador, Salvar <b>baixa uma cópia audit_</b>. Use <b>Chrome</b> ou <b>Edge</b> para salvar cópias diretamente na pasta selecionada.';
     $('btnPickDir').style.display='none';
-    $('startNote').textContent = 'Neste navegador as imagens são carregadas normalmente, mas o botão Salvar baixa uma cópia (não sobrescreve o original). Para sobrescrever, abra em Chrome/Edge.';
+    $('startNote').textContent = 'Salvar baixa uma cópia com o prefixo audit_. A imagem original permanece intacta.';
   }else if(!window.isSecureContext){
     w.classList.remove('hidden');
     w.innerHTML = '⚠ Contexto não seguro. Se o salvamento falhar, sirva a pasta via <code>http://localhost</code> ou abra o arquivo direto no Chrome/Edge.';

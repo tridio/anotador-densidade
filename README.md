@@ -1,7 +1,7 @@
 # Anotador de Densidade
 
 Ferramenta local para anotar densidade em imagens: você preenche **unidades** e **área**, a
-**densidade** é calculada sozinha e gravada na própria imagem como uma legenda preta no canto
+**densidade** é calculada sozinha e gravada em uma cópia da imagem como uma legenda preta no canto
 inferior direito, com a memória de cálculo.
 
 É um único arquivo `index.html`, sem dependências e sem build.
@@ -9,9 +9,15 @@ inferior direito, com a memória de cálculo.
 ## Privacidade
 
 Roda **inteiramente no seu navegador**. Nenhuma imagem é enviada para qualquer servidor —
-os arquivos são lidos e regravados direto no seu computador.
+os arquivos são lidos e as cópias são salvas direto no seu computador.
 
 ## O que acontece com o arquivo ao salvar
+
+A imagem original permanece **intacta**. A versão anotada recebe o prefixo **`audit_`**:
+`foto.jpg` vira `audit_foto.jpg`. Ao selecionar ou arrastar uma pasta, a cópia é salva nela.
+Se esse nome já existir, é usado `audit_foto_1.jpg`, `audit_foto_2.jpg` etc.
+Novos salvamentos da mesma imagem na mesma sessão atualizam apenas a cópia criada.
+Imagens avulsas geram um download com o prefixo `audit_`.
 
 A **resolução e o formato são sempre preservados** (PNG continua PNG, JPEG continua JPEG).
 
@@ -31,22 +37,22 @@ imagem uma segunda vez. Imagens WebP são gravadas sem metadados.
 ## Requisitos
 
 **Chrome ou Edge**, por causa da [File System Access API](https://developer.mozilla.org/docs/Web/API/File_System_Access_API),
-que é o que permite sobrescrever os arquivos originais no disco.
+que permite salvar as cópias diretamente na pasta selecionada.
 
 No Firefox e no Safari a ferramenta ainda abre e calcula, mas o botão Salvar **baixa uma cópia**
-em vez de sobrescrever o original.
+com o prefixo `audit_`.
 
 ## Como usar
 
 1. **Selecionar pasta** (ou arraste uma pasta para a janela) — a permissão de gravação é pedida
    **uma única vez** e cobre todos os arquivos dela. Também dá para escolher/arrastar imagens avulsas,
-   mas aí o navegador pede permissão uma vez por arquivo ao salvar.
+   mas nesse caso a cópia é baixada ao salvar.
 2. Clique numa miniatura para abri-la.
 3. Preencha **unidades** (o foco já está lá) → **Tab** → **área** (aceita `,` ou `.`).
    A densidade (`unidades ÷ área`) é calculada na hora e aparece como uma legenda sobre a imagem.
 4. **Arraste a legenda** até o ponto que ela deve marcar. Isso a fixa ali e **zera os campos**,
    liberando a próxima: preencha de novo para criar outra legenda, quantas quiser na mesma imagem.
-5. **Salvar e voltar** grava todas as legendas na imagem e volta para a lista.
+5. **Salvar e voltar** grava todas as legendas na cópia `audit_` e volta para a lista.
    **Cancelar** volta sem gravar nada.
 
 O botão **Legenda** define em que canto uma legenda nova nasce — útil quando o canto padrão cobre
@@ -63,9 +69,7 @@ bolinha para removê-la). Essas marcações são só visuais e não são gravada
 
 ### Desfazer legendas
 
-Como o programa mantém a imagem original em memória, uma imagem gravada **nesta sessão** pode ser
-restaurada: use **Desfazer legendas** no visualizador, ou o botão direito na miniatura →
-**Desfazer legenda**. O arquivo original é regravado byte a byte, então os metadados voltam intactos.
-
-Isso só vale para o que foi salvo com o programa aberto. Se você fechar e reabrir, o arquivo já
-gravado passa a ser o "original" e não há mais o que desfazer — a opção aparece desabilitada.
+Use **Desfazer legendas** no visualizador, ou o botão direito na miniatura →
+**Desfazer legenda**, para restaurar os bytes originais na **cópia `audit_`** salva nesta sessão.
+Para imagens avulsas, é baixada uma nova cópia `audit_` sem legendas.
+A imagem original nunca é regravada. Essa opção só vale para imagens salvas na sessão atual.
