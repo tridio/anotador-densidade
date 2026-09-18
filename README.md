@@ -16,6 +16,10 @@ os arquivos são lidos e as cópias são salvas direto no seu computador.
 A imagem original permanece **intacta**. A versão anotada recebe o prefixo **`audit_`**:
 `foto.jpg` vira `audit_foto.jpg`. Ao selecionar ou arrastar uma pasta, a cópia é salva nela.
 Se esse nome já existir, é usado `audit_foto_1.jpg`, `audit_foto_2.jpg` etc.
+Antes de gravar, o aplicativo verifica que o destino tem prefixo `audit_` e não é
+nenhuma das imagens originais carregadas. A miniatura salva mostra o nome da cópia.
+A versão e a data/hora da publicação aparecem na página inicial.
+
 Novos salvamentos da mesma imagem na mesma sessão atualizam apenas a cópia criada.
 Imagens avulsas geram um download com o prefixo `audit_`.
 
@@ -52,7 +56,7 @@ com o prefixo `audit_`.
    A densidade (`unidades ÷ área`) é calculada na hora e aparece como uma legenda sobre a imagem.
 4. **Arraste a legenda** até o ponto que ela deve marcar. Isso a fixa ali e **zera os campos**,
    liberando a próxima: preencha de novo para criar outra legenda, quantas quiser na mesma imagem.
-5. **Salvar e voltar** grava todas as legendas na cópia `audit_` e volta para a lista.
+5. **Salvar cópia e voltar** grava todas as legendas na cópia `audit_` e volta para a lista.
    **Cancelar** volta sem gravar nada.
 
 O botão **Legenda** define em que canto uma legenda nova nasce — útil quando o canto padrão cobre

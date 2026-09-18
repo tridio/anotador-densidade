@@ -263,6 +263,7 @@
   <!-- ===================== TELA INICIAL ===================== -->
   <section id="screen-start">
     <h1>Anotador de Densidade</h1>
+    <div id="releaseInfo" class="sub">Versão <b>1.2.0</b> · Publicação: <time datetime="2026-09-18T14:35:07-03:00">18/09/2026 às 14:35 (Brasília)</time></div>
     <div class="sub">
       Selecione as imagens, escolha uma como referência principal e anote
       <b>unidades</b>, <b>área</b> e a <b>densidade</b> calculada — salvando uma cópia com o prefixo <b>audit_</b>.
@@ -332,7 +333,7 @@
               <rect x="4.4" y="8.4" width="7.2" height="5.4" fill="currentColor"/>
               <rect x="5.6" y="9.6" width="4.8" height="1.1" fill="#000"/>
             </svg>
-            Salvar e voltar
+            Salvar cópia e voltar
           </button>
           <h3 id="viewerName" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></h3>
           <div class="spacer"></div>
@@ -613,7 +614,7 @@ function renderWorkGrid(){
   }
   others.forEach(img=>{
     g.appendChild(makeThumb(img, ()=> openViewer(img.id),
-      img.annotated ? '✓ SALVO' : null));
+      img.annotated ? '✓ CÓPIA SALVA' : null));
   });
 }
 
@@ -623,7 +624,7 @@ function makeThumb(img, onClick, flag){
   d.innerHTML =
     `<img src="${img.thumbUrl}" alt="">` +
     (flag ? `<div class="flag">${flag}</div>` : '') +
-    `<div class="name">${escapeHtml(img.name)}</div>`;
+    `<div class="name">${escapeHtml(img.annotated && img.outputName ? img.outputName : img.name)}</div>`;
   d.addEventListener('click', onClick);
   d.addEventListener('contextmenu', (ev)=> abrirCtxMenu(ev, img));
   return d;
@@ -717,6 +718,7 @@ async function openViewer(id){
   const img = images.find(i=> i.id===id);
   if(!img) return;
   $('viewerName').textContent = img.name;
+  $('btnSaveBack').title = 'Salvar cópia: ' + (img.outputName || 'audit_' + img.name) + ' — original preservado';
   legendsOf(img);
   pendingIdx = -1;
   updateLegendBtn(lastLegendPos);
@@ -1098,16 +1100,31 @@ async function ensureWritable(handle){
   return false;
 }
 
+/* Bloqueia gravações no original, inclusive se o destino vier de um estado incorreto.
+   Também protege qualquer outra imagem carregada nesta sessão. */
+async function assertAuditDestination(img, handle, name){
+  if(!name || !name.startsWith('audit_') || name === img.name || handle.name !== name){
+    throw new Error('Salvamento bloqueado: o destino deve ser uma cópia audit_.');
+  }
+  for(const source of images){
+    if(source.handle && await handle.isSameEntry(source.handle)){
+      throw new Error('Salvamento bloqueado: o destino corresponde a uma imagem original.');
+    }
+  }
+}
+
 /* Salva somente na cópia. Nomes existentes recebem um sufixo numérico. */
 async function writeAuditCopy(img, blob){
   if(img.directory){
     if(!(await ensureWritable(img.directory))) throw new Error('Permissão de gravação negada.');
-    if(!img.outputHandle){
+    let handle = img.outputHandle;
+    let name = img.outputName;
+    if(!handle){
       const base = 'audit_' + img.name;
       const dot = base.lastIndexOf('.');
       const stem = dot > 0 ? base.slice(0, dot) : base;
       const ext = dot > 0 ? base.slice(dot) : '';
-      let name = base;
+      name = base;
       for(let n = 1; ; n++){
         try{ await img.directory.getFileHandle(name); }
         catch(err){
@@ -1116,20 +1133,31 @@ async function writeAuditCopy(img, blob){
         }
         name = `${stem}_${n}${ext}`;
       }
-      img.outputHandle = await img.directory.getFileHandle(name, { create:true });
-      img.outputName = name;
+      handle = await img.directory.getFileHandle(name, { create:true });
     }
-    const w = await img.outputHandle.createWritable();
-    await w.write(blob);
-    await w.close();
-    toast('✓ Cópia salva: ' + img.outputName);
+    await assertAuditDestination(img, handle, name);
+    const w = await handle.createWritable();
+    try{
+      await w.write(blob);
+      await w.close();
+    }catch(err){
+      try{ await w.abort(); }catch(_){}
+      throw err;
+    }
+    img.outputHandle = handle;
+    img.outputName = name;
+    toast('✓ Cópia salva: ' + name + ' — original preservado.');
   }else{
+    const name = 'audit_' + img.name;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'audit_' + img.name;
+    a.download = name;
+    document.body.appendChild(a);
     a.click();
+    a.remove();
     setTimeout(()=> URL.revokeObjectURL(a.href), 4000);
-    toast('✓ Cópia baixada: ' + a.download);
+    img.outputName = name;
+    toast('✓ Cópia enviada para download: ' + name + ' — original preservado.');
   }
 }
 
