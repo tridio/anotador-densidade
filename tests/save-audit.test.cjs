@@ -6,7 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
-const saving = script.slice(script.indexOf('async function directoryContainsOriginal'), script.indexOf('/* ===================== SALVAR CÓPIA'));
+const saving = script.slice(script.indexOf('let auditDirectory = null;'), script.indexOf('/* ===================== SALVAR CÓPIA'));
 new vm.Script(script);
 function setup(t){
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'audit-save-'));
@@ -80,12 +80,16 @@ test('permission denial leaves original untouched',async t=>{
  assert.equal(read('foto.jpg'),'original bytes');
 });
 
-test('wrong folder with a same-named file is rejected',async t=>{
- const {context,img,downloads,read}=setup(t); img.directory=null;
- context.window.showDirectoryPicker=async()=>({getFileHandle:async()=>({isSameEntry:async()=>false})});
- await assert.rejects(context.prepareAuditDirectory(img),/não contém a imagem original/);
- assert.equal(img.directory,null);assert.deepEqual(downloads,[]);
- assert.equal(read('foto.jpg'),'original bytes');
+test('first destination is reused for later images from other directories',async t=>{
+ const {context,img,read}=setup(t);img.directory=null;
+ let calls=0;const picker=context.window.showDirectoryPicker;
+ context.window.showDirectoryPicker=()=>{calls++;return picker()};
+ await context.prepareAuditDirectory(img);
+ const other={name:'elsewhere.jpg',directory:{getFileHandle(){throw Error('wrong destination')}}};
+ context.images.push(other);
+ await context.prepareAuditDirectory(other);await context.writeAuditCopy(other,'second annotation');
+ assert.equal(calls,1);assert.equal(other.directory,img.directory);
+ assert.equal(read('audit_elsewhere.jpg'),'second annotation');
 });
 test('canceling folder picker does not download or write',async t=>{
  const {context,img,downloads,read}=setup(t);img.directory=null;
@@ -108,8 +112,8 @@ test('unsupported browser and missing original handle never download',async t=>{
  context.window.showDirectoryPicker=undefined;
  await assert.rejects(context.prepareAuditDirectory(img),/Chrome ou Edge/);
  await assert.rejects(context.writeAuditCopy(img,'bad'),/Selecione a pasta/);
- context.window.showDirectoryPicker=async()=>{throw Error('must not open')};img.handle=null;
- await assert.rejects(context.prepareAuditDirectory(img),/Selecionar pasta/);
+ const destination={};context.window.showDirectoryPicker=async()=>destination;img.handle=null;
+ await context.prepareAuditDirectory(img);assert.equal(img.directory,destination);
  assert.deepEqual(downloads,[]);
 });
 test('save opens directory picker before rendering and keeps annotations on cancel',async t=>{
@@ -120,8 +124,16 @@ test('save opens directory picker before rendering and keeps annotations on canc
  const picker=context.window.showDirectoryPicker;
  context.window.showDirectoryPicker=()=>{events.push('picker');return picker()};
  assert.equal(await context.saveCurrent(),true);assert.deepEqual(events,['picker','render']);
- img.directory=null;events.length=0;
+ img.directory=null;events.length=0;vm.runInContext('auditDirectory = null',context);
  context.window.showDirectoryPicker=async()=>{throw Object.assign(new Error('cancel'),{name:'AbortError'})};
  assert.equal(await context.saveCurrent(),false);assert.deepEqual(events,[]);
  assert.equal(button.disabled,false);
+});
+
+test('loading a folder does not require another destination picker',async t=>{
+ const {context,img}=setup(t);const directory=img.directory;
+ context.window.showDirectoryPicker=()=>{throw Error('unexpected dialog')};
+ await context.prepareAuditDirectory(img);
+ const other={name:'later.jpg'};await context.prepareAuditDirectory(other);
+ assert.equal(other.directory,directory);
 });

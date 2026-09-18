@@ -263,7 +263,7 @@
   <!-- ===================== TELA INICIAL ===================== -->
   <section id="screen-start">
     <h1>Anotador de Densidade</h1>
-    <div id="releaseInfo" class="sub">Versão <b>1.3.0</b> · Publicação: <time datetime="2026-09-18T14:40:50-03:00">18/09/2026 às 14:40 (Brasília)</time></div>
+    <div id="releaseInfo" class="sub">Versão <b>1.4.0</b> · Publicação: <time datetime="2026-09-18T14:53:36-03:00">18/09/2026 às 14:53 (Brasília)</time></div>
     <div class="sub">
       Selecione as imagens, escolha uma como referência principal e anote
       <b>unidades</b>, <b>área</b> e a <b>densidade</b> calculada — salvando uma cópia com o prefixo <b>audit_</b>.
@@ -275,8 +275,8 @@
     <div class="droptip">…ou <b>arraste</b> imagens — ou uma <b>pasta inteira</b> — para qualquer lugar da janela.</div>
     <div class="note" id="startNote">
       <b>Recomendado:</b> "Selecionar pasta" — ou <b>arrastar uma pasta</b> — pede permissão de gravação
-      <b>uma única vez</b> e salva cópias <b>audit_</b> na mesma pasta, mantendo os originais intactos.
-      Imagens avulsas (botão ou arrastadas) pedem que você selecione a pasta do original no primeiro salvamento.
+      <b>uma única vez</b>. A primeira pasta escolhida será o destino de todas as cópias <b>audit_</b> nesta sessão.
+      Para imagens avulsas, escolha o destino apenas no primeiro salvamento. Os originais permanecem intactos.
     </div>
   </section>
 
@@ -433,6 +433,7 @@ function addImage(name, type, file, handle, directory = null){
 async function pickDirectory(){
   try{
     const dir = await window.showDirectoryPicker({ mode:'readwrite' });
+    if(!auditDirectory) auditDirectory = dir;
     let count = 0;
     for await (const entry of dir.values()){
       if(entry.kind==='file' && IMG_RE.test(entry.name)){
@@ -528,6 +529,7 @@ async function onDrop(e){
       for(const h of handles){
         if(!h) continue;   // pode vir null: caímos no fallback logo abaixo
         if(h.kind === 'directory'){
+          if(!auditDirectory) auditDirectory = h;
           // Pasta arrastada: um único pedido de permissão cobre todos os arquivos dentro
           try{ dirGranted = (await h.requestPermission({ mode:'readwrite' })) === 'granted'; }catch(_){}
           for await (const entry of h.values()){
@@ -537,14 +539,14 @@ async function onDrop(e){
             }
           }
         }else if(h.kind === 'file' && IMG_RE.test(h.name)){
-          // Arquivo avulso: solicita a pasta do original ao salvar.
+          // Arquivo avulso: usa o destino compartilhado, escolhido no primeiro salvamento.
           const file = await h.getFile();
           if(addImage(h.name, file.type, file, h)) count++;
         }
       }
     }
     // Fallback: navegador sem File System Access, ou handles que vieram nulos.
-    // Sem um handle do original, será necessário reabrir pela opção Selecionar pasta.
+    // O destino das cópias pode ser escolhido mesmo sem um handle do original.
     if(count === 0 && droppedFiles.length){
       for(const file of droppedFiles){
         if(IMG_RE.test(file.name) && addImage(file.name, file.type, file, null)) count++;
@@ -1100,40 +1102,24 @@ async function ensureWritable(handle){
   return false;
 }
 
-/* O navegador não expõe a pasta pai de um arquivo avulso.
-   Abre o seletor antes de processar a imagem, ainda no clique do usuário. */
-async function directoryContainsOriginal(directory, img){
-  if(!img.handle) return false;
-  try{
-    const entry = await directory.getFileHandle(img.name);
-    return await entry.isSameEntry(img.handle);
-  }catch(err){
-    if(err.name === 'NotFoundError' || err.name === 'TypeMismatchError') return false;
-    throw err;
-  }
-}
-
+/* A primeira pasta escolhida é o destino de todas as cópias nesta sessão. */
+let auditDirectory = null;
 async function prepareAuditDirectory(img){
-  if(img.directory) return;
-  if(!window.showDirectoryPicker){
-    throw new Error('Use Chrome ou Edge para salvar na pasta da imagem original.');
+  if(!auditDirectory){
+    if(img.directory){
+      auditDirectory = img.directory;
+    }else{
+      if(!window.showDirectoryPicker){
+        throw new Error('Use Chrome ou Edge para salvar as cópias na pasta selecionada.');
+      }
+      toast('Selecione a pasta de destino para todas as cópias audit_.');
+      const options = { mode:'readwrite' };
+      if(img.handle) options.startIn = img.handle;
+      // Antes de processar a imagem, enquanto o clique ainda autoriza o seletor.
+      auditDirectory = await window.showDirectoryPicker(options);
+    }
   }
-  if(!img.handle){
-    throw new Error('Abra as imagens por Selecionar pasta para permitir salvar junto ao original.');
-  }
-  toast('Selecione a pasta que contém ' + img.name + '.');
-  const directory = await window.showDirectoryPicker({ mode:'readwrite', startIn:img.handle });
-  if(!(await directoryContainsOriginal(directory, img))){
-    throw new Error('A pasta selecionada não contém a imagem original. Clique em Salvar e escolha a pasta correta.');
-  }
-  img.directory = directory;
-  // Reutiliza a permissão para outras imagens já abertas dessa mesma pasta.
-  for(const other of images){
-    if(other.directory || !other.handle) continue;
-    try{
-      if(await directoryContainsOriginal(directory, other)) other.directory = directory;
-    }catch(_){ /* Outra imagem pode ter sido movida; será verificada ao salvar. */ }
-  }
+  img.directory = auditDirectory;
 }
 
 /* Bloqueia gravações no original, inclusive se o destino vier de um estado incorreto.
@@ -1184,7 +1170,7 @@ async function writeAuditCopy(img, blob){
     img.outputName = name;
     toast('✓ Cópia salva: ' + name + ' — original preservado.');
   }else{
-    throw new Error('Selecione a pasta da imagem original antes de salvar.');
+    throw new Error('Selecione a pasta de destino antes de salvar.');
   }
 }
 
@@ -1297,9 +1283,9 @@ $('btnDesfazer').addEventListener('click', ()=> undoLegends(currentId));
   const w = $('warn');
   if(!FS_OK){
     w.classList.remove('hidden');
-    w.innerHTML = 'Use <b>Chrome</b> ou <b>Edge</b> para salvar a cópia audit_ na mesma pasta da imagem original.';
+    w.innerHTML = 'Use <b>Chrome</b> ou <b>Edge</b> para salvar as cópias audit_ na pasta escolhida.';
     $('btnPickDir').style.display='none';
-    $('startNote').textContent = 'O salvamento na pasta original exige Chrome ou Edge. Não são feitos downloads automáticos.';
+    $('startNote').textContent = 'O salvamento na pasta escolhida exige Chrome ou Edge. Não são feitos downloads automáticos.';
   }else if(!window.isSecureContext){
     w.classList.remove('hidden');
     w.innerHTML = '⚠ Contexto não seguro. Se o salvamento falhar, sirva a pasta via <code>http://localhost</code> ou abra o arquivo direto no Chrome/Edge.';
