@@ -21,7 +21,11 @@ nenhuma das imagens originais carregadas. A miniatura salva mostra o nome da có
 A versão e a data/hora da publicação aparecem na página inicial.
 
 Novos salvamentos da mesma imagem na mesma sessão atualizam apenas a cópia criada.
-Imagens avulsas geram um download com o prefixo `audit_`.
+Para imagens avulsas, no primeiro salvamento selecione a pasta que contém o original.
+O aplicativo verifica a identidade do arquivo e reutiliza a permissão para outras imagens
+já abertas da mesma pasta. Cancelar a seleção mantém as legendas para tentar novamente.
+Não há download automático. Se o navegador não fornecer acesso ao arquivo original,
+reabra as imagens pela opção **Selecionar pasta**.
 
 A **resolução e o formato são sempre preservados** (PNG continua PNG, JPEG continua JPEG).
 
@@ -43,14 +47,14 @@ imagem uma segunda vez. Imagens WebP são gravadas sem metadados.
 **Chrome ou Edge**, por causa da [File System Access API](https://developer.mozilla.org/docs/Web/API/File_System_Access_API),
 que permite salvar as cópias diretamente na pasta selecionada.
 
-No Firefox e no Safari a ferramenta ainda abre e calcula, mas o botão Salvar **baixa uma cópia**
-com o prefixo `audit_`.
+No Firefox e no Safari a ferramenta ainda abre e calcula, mas o salvamento na pasta
+exige abrir o aplicativo no Chrome ou Edge.
 
 ## Como usar
 
 1. **Selecionar pasta** (ou arraste uma pasta para a janela) — a permissão de gravação é pedida
    **uma única vez** e cobre todos os arquivos dela. Também dá para escolher/arrastar imagens avulsas,
-   mas nesse caso a cópia é baixada ao salvar.
+   mas nesse caso selecione a pasta do original no primeiro salvamento.
 2. Clique numa miniatura para abri-la.
 3. Preencha **unidades** (o foco já está lá) → **Tab** → **área** (aceita `,` ou `.`).
    A densidade (`unidades ÷ área`) é calculada na hora e aparece como uma legenda sobre a imagem.
@@ -75,5 +79,5 @@ bolinha para removê-la). Essas marcações são só visuais e não são gravada
 
 Use **Desfazer legendas** no visualizador, ou o botão direito na miniatura →
 **Desfazer legenda**, para restaurar os bytes originais na **cópia `audit_`** salva nesta sessão.
-Para imagens avulsas, é baixada uma nova cópia `audit_` sem legendas.
+A cópia permanece na mesma pasta do original, também para imagens abertas avulsas.
 A imagem original nunca é regravada. Essa opção só vale para imagens salvas na sessão atual.
