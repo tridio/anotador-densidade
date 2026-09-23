@@ -34,15 +34,15 @@ test('save, save again and undo change only the audit copy on disk',async t=>{
  for(const content of ['annotated','updated','original bytes']){
    await context.writeAuditCopy(img,content);
    assert.equal(read('foto.jpg'),'original bytes');
-   assert.equal(read('audit_foto.jpg'),content);
+   assert.equal(read('_audit_foto.jpg'),content);
  }
 });
 test('existing audit file is preserved and a numbered copy is created',async t=>{
  const {context,img,read,root}=setup(t);
- fs.writeFileSync(path.join(root,'audit_foto.jpg'),'older audit');
+ fs.writeFileSync(path.join(root,'_audit_foto.jpg'),'older audit');
  await context.writeAuditCopy(img,'new audit');
- assert.equal(read('audit_foto.jpg'),'older audit');
- assert.equal(read('audit_foto_1.jpg'),'new audit');
+ assert.equal(read('_audit_foto.jpg'),'older audit');
+ assert.equal(read('_audit_foto_1.jpg'),'new audit');
  assert.equal(read('foto.jpg'),'original bytes');
 });
 test('corrupted output state cannot overwrite original',async t=>{
@@ -53,25 +53,25 @@ test('corrupted output state cannot overwrite original',async t=>{
 });
 test('identity check blocks even a handle disguised with an audit name',async t=>{
  const {context,img,read}=setup(t);
- img.outputHandle={...img.handle,name:'audit_foto.jpg'};img.outputName='audit_foto.jpg';
+ img.outputHandle={...img.handle,name:'_audit_foto.jpg'};img.outputName='_audit_foto.jpg';
  await assert.rejects(context.writeAuditCopy(img,'bad'),/imagem original/);
  assert.equal(read('foto.jpg'),'original bytes');
 });
 test('another loaded original cannot be used as the output',async t=>{
  const {context,img,handle,read,root}=setup(t);
- fs.writeFileSync(path.join(root,'audit_other.jpg'),'other original');
- context.images.push({handle:handle('audit_other.jpg')});
- img.outputHandle=handle('audit_other.jpg');img.outputName='audit_other.jpg';
+ fs.writeFileSync(path.join(root,'_audit_other.jpg'),'other original');
+ context.images.push({handle:handle('_audit_other.jpg')});
+ img.outputHandle=handle('_audit_other.jpg');img.outputName='_audit_other.jpg';
  await assert.rejects(context.writeAuditCopy(img,'bad'),/imagem original/);
- assert.equal(read('audit_other.jpg'),'other original');
+ assert.equal(read('_audit_other.jpg'),'other original');
 });
 test('loose images save in the selected original directory without downloading',async t=>{
  const {context,img,downloads,read}=setup(t);img.directory=null;
  await context.prepareAuditDirectory(img);
  await context.writeAuditCopy(img,'annotated');
  assert.deepEqual(downloads,[]);
- assert.equal(read('audit_foto.jpg'),'annotated');
- assert.equal(img.outputName,'audit_foto.jpg');
+ assert.equal(read('_audit_foto.jpg'),'annotated');
+ assert.equal(img.outputName,'_audit_foto.jpg');
  assert.equal(read('foto.jpg'),'original bytes');
 });
 test('permission denial leaves original untouched',async t=>{
@@ -89,7 +89,7 @@ test('first destination is reused for later images from other directories',async
  context.images.push(other);
  await context.prepareAuditDirectory(other);await context.writeAuditCopy(other,'second annotation');
  assert.equal(calls,1);assert.equal(other.directory,img.directory);
- assert.equal(read('audit_elsewhere.jpg'),'second annotation');
+ assert.equal(read('_audit_elsewhere.jpg'),'second annotation');
 });
 test('canceling folder picker does not download or write',async t=>{
  const {context,img,downloads,read}=setup(t);img.directory=null;
@@ -140,16 +140,16 @@ test('loading a folder does not require another destination picker',async t=>{
 test('HEIC output uses PNG extension and preserves an existing PNG copy',async t=>{
  const {context,img,read,root}=setup(t);
  img.name='photo.HEIC';img.isHeic=true;
- fs.writeFileSync(path.join(root,'audit_photo.png'),'existing png');
+ fs.writeFileSync(path.join(root,'_audit_photo.png'),'existing png');
  await context.writeAuditCopy(img,'converted png');
- assert.equal(img.outputName,'audit_photo_1.png');
- assert.equal(read('audit_photo.png'),'existing png');
- assert.equal(read('audit_photo_1.png'),'converted png');
+ assert.equal(img.outputName,'_audit_photo_1.png');
+ assert.equal(read('_audit_photo.png'),'existing png');
+ assert.equal(read('_audit_photo_1.png'),'converted png');
  assert.equal(read('foto.jpg'),'original bytes');
 });
 test('HEIF and MIME-detected HEIC get a PNG filename',t=>{
  const {context}=setup(t);
- assert.equal(context.auditBaseName({name:'capture.HEIF',isHeic:true}),'audit_capture.png');
- assert.equal(context.auditBaseName({name:'capture',isHeic:true}),'audit_capture.png');
- assert.equal(context.auditBaseName({name:'capture.jpg'}),'audit_capture.jpg');
+ assert.equal(context.auditBaseName({name:'capture.HEIF',isHeic:true}),'_audit_capture.png');
+ assert.equal(context.auditBaseName({name:'capture',isHeic:true}),'_audit_capture.png');
+ assert.equal(context.auditBaseName({name:'capture.jpg'}),'_audit_capture.jpg');
 });

@@ -14,10 +14,10 @@ os arquivos são lidos e as cópias são salvas direto no seu computador.
 
 ## O que acontece com o arquivo ao salvar
 
-A imagem original permanece **intacta**. A versão anotada recebe o prefixo **`audit_`**:
-`foto.jpg` vira `audit_foto.jpg`. A primeira pasta selecionada (ou arrastada) será o destino de todas as cópias na sessão.
-Se esse nome já existir, é usado `audit_foto_1.jpg`, `audit_foto_2.jpg` etc.
-Antes de gravar, o aplicativo verifica que o destino tem prefixo `audit_` e não é
+A imagem original permanece **intacta**. A versão anotada recebe o prefixo **`_audit_`**:
+`foto.jpg` vira `_audit_foto.jpg`. A primeira pasta selecionada (ou arrastada) será o destino de todas as cópias na sessão.
+Se esse nome já existir, é usado `_audit_foto_1.jpg`, `_audit_foto_2.jpg` etc.
+Antes de gravar, o aplicativo verifica que o destino tem prefixo `_audit_` e não é
 nenhuma das imagens originais carregadas. A miniatura salva mostra o nome da cópia.
 A versão e a data/hora da publicação aparecem na página inicial.
 
@@ -29,7 +29,7 @@ Cancelar o primeiro diálogo mantém as legendas e permite escolher novamente.
 Ao recarregar ou fechar o aplicativo, a pasta de destino precisa ser escolhida outra vez.
 
 A resolução é preservada. PNG continua PNG e JPEG continua JPEG.
-**HEIC/HEIF é convertido para PNG**: `foto.HEIC` gera `audit_foto.png`.
+**HEIC/HEIF é convertido para PNG**: `foto.HEIC` gera `_audit_foto.png`.
 A conversão acontece no navegador, sem enviar imagens a um servidor.
 Arquivos com várias imagens usam a imagem principal escolhida pelo decodificador.
 Os metadados HEIC (EXIF, GPS, HDR etc.) não são transplantados ao PNG; o original
@@ -66,7 +66,7 @@ exige abrir o aplicativo no Chrome ou Edge.
    A densidade (`unidades ÷ área`) é calculada na hora e aparece como uma legenda sobre a imagem.
 4. **Arraste a legenda** até o ponto que ela deve marcar. Isso a fixa ali e **zera os campos**,
    liberando a próxima: preencha de novo para criar outra legenda, quantas quiser na mesma imagem.
-5. **Salvar cópia e voltar** grava todas as legendas na cópia `audit_`, incluindo a última
+5. **Salvar cópia e voltar** grava todas as legendas na cópia `_audit_`, incluindo a última
    preenchida mesmo sem arrastá-la, e volta para a lista. Elas são mantidas ao reabrir
    a imagem na mesma sessão.
    **Cancelar** volta sem gravar nada.
@@ -86,7 +86,7 @@ bolinha para removê-la). Essas marcações são só visuais e não são gravada
 ### Desfazer legendas
 
 Use **Desfazer legendas** no visualizador, ou o botão direito na miniatura →
-**Desfazer legenda**, para restaurar a imagem sem legendas na **cópia `audit_`** salva nesta sessão.
+**Desfazer legenda**, para restaurar a imagem sem legendas na **cópia `_audit_`** salva nesta sessão.
 Para HEIC/HEIF, restaura o PNG convertido, sem gravar bytes HEIC num arquivo PNG.
 A cópia permanece na primeira pasta escolhida para a sessão.
 A imagem original nunca é regravada. Essa opção só vale para imagens salvas na sessão atual.

@@ -37,14 +37,14 @@ const server = http.createServer((req,res)=>{
    const img=images[0];const bitmap=await createImageBitmap(await ensureBlob(img));
    const result={type:img.type,width:bitmap.width,height:bitmap.height,name:auditBaseName(img)};bitmap.close();return result;
  });
- assert.equal(converted.type,'image/png');assert.equal(converted.name,'audit_photo.png');
+ assert.equal(converted.type,'image/png');assert.equal(converted.name,'_audit_photo.png');
  assert(converted.width>0 && converted.height>0);
  await page.click('#grid-work .thumb');
  await page.fill('#inpUnid','10');await page.fill('#inpArea','2');
  await page.click('#btnSaveBack');
  await page.waitForFunction(()=>images[0].annotated);
  const saved=await page.evaluate(async()=>{
-   const output=await (await testDir.getFileHandle('audit_photo.png')).getFile();
+   const output=await (await testDir.getFileHandle('_audit_photo.png')).getFile();
    const bitmap=await createImageBitmap(output);const result={signature:[...new Uint8Array(await output.slice(0,8).arrayBuffer())],width:bitmap.width,height:bitmap.height};bitmap.close();
    result.original=Array.from(new Uint8Array(await (await testOriginal.getFile()).arrayBuffer()));
    return result;
@@ -54,7 +54,7 @@ const server = http.createServer((req,res)=>{
  assert.deepEqual(Buffer.from(saved.original),fixture);
  const undo=await page.evaluate(async()=>{
    await undoLegends(images[0].id);
-   const output=await (await testDir.getFileHandle('audit_photo.png')).getFile();
+   const output=await (await testDir.getFileHandle('_audit_photo.png')).getFile();
    const base=await ensureBlob(images[0]);
    return {output:[...new Uint8Array(await output.arrayBuffer())],base:[...new Uint8Array(await base.arrayBuffer())]};
  });
@@ -72,7 +72,7 @@ const server = http.createServer((req,res)=>{
    await prepareAuditDirectory(heif);await writeAuditCopy(heif,await ensureBlob(heif));
    return {heifName:heif.outputName,invalid:invalid===null,pngName:auditBaseName(normal),jpgName:auditBaseName(jpg),count:images.length};
  });
- assert.deepEqual(regression,{heifName:'audit_other.png',invalid:true,pngName:'audit_normal.png',jpgName:'audit_normal.jpg',count:4});
+ assert.deepEqual(regression,{heifName:'_audit_other.png',invalid:true,pngName:'_audit_normal.png',jpgName:'_audit_normal.jpg',count:4});
  assert.deepEqual(errors,[]);
  console.log('PASS real HEIC decode, thumbnail, annotation, PNG dimensions/signature, unchanged original, undo PNG, HEIF extension, corrupt HEIC rejection, PNG/JPEG regression.',converted);
  }finally{await browser.close();}

@@ -263,10 +263,10 @@
   <!-- ===================== TELA INICIAL ===================== -->
   <section id="screen-start">
     <h1>Anotador de Densidade</h1>
-    <div id="releaseInfo" class="sub">Versão <b>1.5.1</b> · Publicação: <time datetime="2026-09-23T09:41:01-03:00">23/09/2026 às 09:41 (Brasília)</time></div>
+    <div id="releaseInfo" class="sub">Versão <b>1.5.2</b> · Publicação: <time datetime="2026-09-23T09:45:09-03:00">23/09/2026 às 09:45 (Brasília)</time></div>
     <div class="sub">
       Selecione as imagens, escolha uma como referência principal e anote
-      <b>unidades</b>, <b>área</b> e a <b>densidade</b> calculada — salvando uma cópia com o prefixo <b>audit_</b>.
+      <b>unidades</b>, <b>área</b> e a <b>densidade</b> calculada — salvando uma cópia com o prefixo <b>_audit_</b>.
       <br>Fotos HEIC/HEIF são convertidas para PNG; o original é preservado.
     </div>
     <div class="startbtns">
@@ -276,7 +276,7 @@
     <div class="droptip">…ou <b>arraste</b> imagens — ou uma <b>pasta inteira</b> — para qualquer lugar da janela.</div>
     <div class="note" id="startNote">
       <b>Recomendado:</b> "Selecionar pasta" — ou <b>arrastar uma pasta</b> — pede permissão de gravação
-      <b>uma única vez</b>. A primeira pasta escolhida será o destino de todas as cópias <b>audit_</b> nesta sessão.
+      <b>uma única vez</b>. A primeira pasta escolhida será o destino de todas as cópias <b>_audit_</b> nesta sessão.
       Para imagens avulsas, escolha o destino apenas no primeiro salvamento. Os originais permanecem intactos.
     </div>
   </section>
@@ -326,7 +326,7 @@
       <!-- Sub-tela: visualizador -->
       <div id="viewer" class="hidden">
         <div class="pane-head">
-          <button id="btnSaveBack" title="Salvar uma cópia audit_ com a legenda e voltar à lista">
+          <button id="btnSaveBack" title="Salvar uma cópia _audit_ com a legenda e voltar à lista">
             <svg class="ico" viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
               <rect x="1.2" y="1.2" width="13.6" height="13.6" fill="none" stroke="currentColor" stroke-width="1.6"/>
               <path d="M4 1.2 V5 H10.5 V1.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
@@ -338,7 +338,7 @@
           </button>
           <h3 id="viewerName" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></h3>
           <div class="spacer"></div>
-          <button class="ghost" id="btnDesfazer" title="Remover as legendas da cópia audit_, preservando o original">↺ Desfazer legendas</button>
+          <button class="ghost" id="btnDesfazer" title="Remover as legendas da cópia _audit_, preservando o original">↺ Desfazer legendas</button>
           <button class="ghost" id="btnCancel" title="Voltar à lista sem gravar nada">✕ Cancelar</button>
         </div>
         <div class="pane-hint" id="viewerHint">
@@ -1140,7 +1140,7 @@ async function ensureWritable(handle){
 let auditDirectory = null;
 function auditBaseName(img){
   const name = img.isHeic ? img.name.replace(/\.(heic|heif)$/i, '') + '.png' : img.name;
-  return 'audit_' + name;
+  return '_audit_' + name;
 }
 async function prepareAuditDirectory(img){
   if(!auditDirectory){
@@ -1150,7 +1150,7 @@ async function prepareAuditDirectory(img){
       if(!window.showDirectoryPicker){
         throw new Error('Use Chrome ou Edge para salvar as cópias na pasta selecionada.');
       }
-      toast('Selecione a pasta de destino para todas as cópias audit_.');
+      toast('Selecione a pasta de destino para todas as cópias _audit_.');
       const options = { mode:'readwrite' };
       if(img.handle) options.startIn = img.handle;
       // Antes de processar a imagem, enquanto o clique ainda autoriza o seletor.
@@ -1163,8 +1163,8 @@ async function prepareAuditDirectory(img){
 /* Bloqueia gravações no original, inclusive se o destino vier de um estado incorreto.
    Também protege qualquer outra imagem carregada nesta sessão. */
 async function assertAuditDestination(img, handle, name){
-  if(!name || !name.startsWith('audit_') || name === img.name || handle.name !== name){
-    throw new Error('Salvamento bloqueado: o destino deve ser uma cópia audit_.');
+  if(!name || !name.startsWith('_audit_') || name === img.name || handle.name !== name){
+    throw new Error('Salvamento bloqueado: o destino deve ser uma cópia _audit_.');
   }
   for(const source of images){
     if(source.handle && await handle.isSameEntry(source.handle)){
@@ -1250,7 +1250,7 @@ async function saveAndBack(){
 }
 
 /* ===================== DESFAZER LEGENDAS =====================
-   Restaura a imagem sem legendas apenas na cópia audit_ desta sessão (PNG para HEIC). */
+   Restaura a imagem sem legendas apenas na cópia _audit_ desta sessão (PNG para HEIC). */
 async function undoLegends(id){
   const img = images.find(i=> i.id===id);
   if(!img) return false;
@@ -1325,7 +1325,7 @@ $('btnDesfazer').addEventListener('click', ()=> undoLegends(currentId));
   const w = $('warn');
   if(!FS_OK){
     w.classList.remove('hidden');
-    w.innerHTML = 'Use <b>Chrome</b> ou <b>Edge</b> para salvar as cópias audit_ na pasta escolhida.';
+    w.innerHTML = 'Use <b>Chrome</b> ou <b>Edge</b> para salvar as cópias _audit_ na pasta escolhida.';
     $('btnPickDir').style.display='none';
     $('startNote').textContent = 'O salvamento na pasta escolhida exige Chrome ou Edge. Não são feitos downloads automáticos.';
   }else if(!window.isSecureContext){
