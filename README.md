@@ -4,7 +4,8 @@ Ferramenta local para anotar densidade em imagens: você preenche **unidades** e
 **densidade** é calculada sozinha e gravada em uma cópia da imagem como uma legenda preta no canto
 inferior direito, com a memória de cálculo.
 
-É um único arquivo `index.html`, sem dependências e sem build.
+Não exige build. Abra `index.html` mantendo a pasta `vendor/` ao lado dele.
+O conversor HEIC local só é carregado quando uma foto HEIC/HEIF é aberta.
 
 ## Privacidade
 
@@ -27,7 +28,12 @@ de outras pastas. Não há download automático nem um novo pedido de destino po
 Cancelar o primeiro diálogo mantém as legendas e permite escolher novamente.
 Ao recarregar ou fechar o aplicativo, a pasta de destino precisa ser escolhida outra vez.
 
-A **resolução e o formato são sempre preservados** (PNG continua PNG, JPEG continua JPEG).
+A resolução é preservada. PNG continua PNG e JPEG continua JPEG.
+**HEIC/HEIF é convertido para PNG**: `foto.HEIC` gera `audit_foto.png`.
+A conversão acontece no navegador, sem enviar imagens a um servidor.
+Arquivos com várias imagens usam a imagem principal escolhida pelo decodificador.
+Os metadados HEIC (EXIF, GPS, HDR etc.) não são transplantados ao PNG; o original
+permanece intacto. A imagem convertida pode ter cores diferentes em fotos HDR.
 
 - **PNG:** gravação sem perda — os pixels saem idênticos, exceto onde a legenda é desenhada.
 - **JPEG:** a imagem é recomprimida com qualidade 0,95, porque não há como escrever a legenda
@@ -78,6 +84,22 @@ bolinha para removê-la). Essas marcações são só visuais e não são gravada
 ### Desfazer legendas
 
 Use **Desfazer legendas** no visualizador, ou o botão direito na miniatura →
-**Desfazer legenda**, para restaurar os bytes originais na **cópia `audit_`** salva nesta sessão.
+**Desfazer legenda**, para restaurar a imagem sem legendas na **cópia `audit_`** salva nesta sessão.
+Para HEIC/HEIF, restaura o PNG convertido, sem gravar bytes HEIC num arquivo PNG.
 A cópia permanece na primeira pasta escolhida para a sessão.
 A imagem original nunca é regravada. Essa opção só vale para imagens salvas na sessão atual.
+
+## Conversor HEIC
+
+Usa [heic-to 1.5.2](https://github.com/hoppergee/heic-to), distribuído localmente
+em `vendor/`, com a licença e as informações de origem nesse diretório.
+
+## Verificação
+
+- Testes de salvamento: `node --test tests/save-audit.test.cjs`.
+- Integração HEIC no Edge: com Playwright disponível, execute
+  `node tests/heic-browser.cjs CAMINHO_PARA_EXEMPLO.heic`.
+  Foi validada a imagem pública `examples/example.heic` do projeto
+  [libheif](https://github.com/strukturag/libheif/blob/master/examples/example.heic).
+  O teste usa arquivos temporários do navegador e verifica conversão, dimensões,
+  assinatura PNG, preservação do original, desfazer e rejeição de arquivo inválido.

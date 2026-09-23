@@ -246,7 +246,7 @@
 <div id="dropzone" class="hidden">
   <div class="dz">
     Solte as imagens aqui
-    <small>Aceita arquivos soltos ou uma pasta inteira</small>
+    <small>Aceita arquivos soltos ou uma pasta inteira, incluindo HEIC/HEIF</small>
   </div>
 </div>
 
@@ -263,10 +263,11 @@
   <!-- ===================== TELA INICIAL ===================== -->
   <section id="screen-start">
     <h1>Anotador de Densidade</h1>
-    <div id="releaseInfo" class="sub">Versão <b>1.4.0</b> · Publicação: <time datetime="2026-09-18T14:53:36-03:00">18/09/2026 às 14:53 (Brasília)</time></div>
+    <div id="releaseInfo" class="sub">Versão <b>1.5.0</b> · Publicação: <time datetime="2026-09-23T09:29:17-03:00">23/09/2026 às 09:29 (Brasília)</time></div>
     <div class="sub">
       Selecione as imagens, escolha uma como referência principal e anote
       <b>unidades</b>, <b>área</b> e a <b>densidade</b> calculada — salvando uma cópia com o prefixo <b>audit_</b>.
+      <br>Fotos HEIC/HEIF são convertidas para PNG; o original é preservado.
     </div>
     <div class="startbtns">
       <button id="btnPickDir">📁 Selecionar pasta <span class="badge-rec">sem prompts</span></button>
@@ -386,7 +387,7 @@ let images = [];            // { id, name, type, file, handle, thumbUrl, blob, a
 let principalId = null;
 let currentId = null;       // imagem aberta no visualizador
 let idSeq = 1;
-const IMG_RE = /\.(png|jpe?g|gif|bmp|webp)$/i;
+const IMG_RE = /\.(png|jpe?g|gif|bmp|webp|heic|heif)$/i;
 
 /* ===================== FORMATAÇÃO (pt-BR) ===================== */
 const nf = (min,max)=> new Intl.NumberFormat('pt-BR',{minimumFractionDigits:min, maximumFractionDigits:max});
@@ -418,13 +419,46 @@ function toast(msg, ms=2600){
 }
 
 /* ===================== CARREGAR IMAGENS ===================== */
-function addImage(name, type, file, handle, directory = null){
+let heicDecoderPromise = null;
+function loadHeicDecoder(){
+  if(!heicDecoderPromise){
+    heicDecoderPromise = new Promise((resolve, reject)=>{
+      const script = document.createElement('script');
+      script.src = './vendor/heic-to-1.5.2.js';
+      script.onload = ()=>{
+        if(typeof window.HeicTo === 'function') resolve(window.HeicTo);
+        else { script.remove(); reject(new Error('Conversor HEIC indisponível.')); }
+      };
+      script.onerror = ()=>{ script.remove(); reject(new Error('Não foi possível carregar o conversor HEIC. Tente novamente.')); };
+      document.head.appendChild(script);
+    }).catch(err=>{ heicDecoderPromise = null; throw err; });
+  }
+  return heicDecoderPromise;
+}
+
+async function addImage(name, type, file, handle, directory = null){
   // dedup simples por nome+tamanho
   if(images.some(i => i.name===name && i.file && file && i.file.size===file.size)) return null;
+  const isHeic = /\.(heic|heif)$/i.test(name) || /^image\/hei[cf](?:-sequence)?$/i.test(type);
+  let displayBlob = file;
+  if(isHeic){
+    toast('Convertendo ' + name + ' para visualização…');
+    try{
+      const convert = await loadHeicDecoder();
+      displayBlob = await convert({ blob:file, type:'image/png' });
+      if(!displayBlob || displayBlob.type !== 'image/png' || !displayBlob.size){
+        throw new Error('O conversor não retornou uma imagem PNG válida.');
+      }
+    }catch(err){
+      toast('Não foi possível abrir ' + name + ': ' + (err.message || String(err)), 10000);
+      return null; // Uma imagem inválida não impede carregar as demais.
+    }
+  }
   const img = {
-    id: idSeq++, name, type: type || 'image/png', file, handle, directory, outputHandle: null, outputName: null,
-    thumbUrl: URL.createObjectURL(file),
-    blob: null, annotated:false, unid:null, area:null, dens:null
+    id: idSeq++, name, type: isHeic ? 'image/png' : (type || 'image/png'), isHeic,
+    file, handle, directory, outputHandle: null, outputName: null,
+    thumbUrl: URL.createObjectURL(displayBlob),
+    blob: isHeic ? displayBlob : null, annotated:false, unid:null, area:null, dens:null
   };
   images.push(img);
   return img;
@@ -438,7 +472,7 @@ async function pickDirectory(){
     for await (const entry of dir.values()){
       if(entry.kind==='file' && IMG_RE.test(entry.name)){
         const file = await entry.getFile();
-        if(addImage(entry.name, file.type, file, entry, dir)) count++;
+        if(await addImage(entry.name, file.type, file, entry, dir)) count++;
       }
     }
     if(count===0) toast('Nenhuma imagem encontrada na pasta.');
@@ -452,12 +486,12 @@ async function pickFiles(){
     if(FS_OK){
       const handles = await window.showOpenFilePicker({
         multiple:true,
-        types:[{ description:'Imagens', accept:{'image/*':['.png','.jpg','.jpeg','.gif','.bmp','.webp']} }]
+        types:[{ description:'Imagens', accept:{'image/*':['.png','.jpg','.jpeg','.gif','.bmp','.webp','.heic','.heif']} }]
       });
       let count=0;
       for(const h of handles){
         const file = await h.getFile();
-        if(addImage(file.name, file.type, file, h)) count++;
+        if(await addImage(file.name, file.type, file, h)) count++;
       }
       if(count) toast(count+' imagem(ns) adicionada(s).');
       afterLoad();
@@ -469,13 +503,13 @@ async function pickFiles(){
 
 // Fallback (Firefox/Safari): <input type=file>
 const fallbackInput = document.createElement('input');
-fallbackInput.type='file'; fallbackInput.multiple=true; fallbackInput.accept='image/*';
+fallbackInput.type='file'; fallbackInput.multiple=true; fallbackInput.accept='image/*,.heic,.heif';
 fallbackInput.style.display='none';
 document.body.appendChild(fallbackInput);
-fallbackInput.addEventListener('change', ()=>{
+fallbackInput.addEventListener('change', async ()=>{
   let count=0;
   for(const file of fallbackInput.files){
-    if(addImage(file.name, file.type, file, null)) count++;
+    if(await addImage(file.name, file.type, file, null)) count++;
   }
   fallbackInput.value='';
   if(count) toast(count+' imagem(ns) adicionada(s).');
@@ -535,13 +569,13 @@ async function onDrop(e){
           for await (const entry of h.values()){
             if(entry.kind==='file' && IMG_RE.test(entry.name)){
               const file = await entry.getFile();
-              if(addImage(entry.name, file.type, file, entry, h)) count++;
+              if(await addImage(entry.name, file.type, file, entry, h)) count++;
             }
           }
         }else if(h.kind === 'file' && IMG_RE.test(h.name)){
           // Arquivo avulso: usa o destino compartilhado, escolhido no primeiro salvamento.
           const file = await h.getFile();
-          if(addImage(h.name, file.type, file, h)) count++;
+          if(await addImage(h.name, file.type, file, h)) count++;
         }
       }
     }
@@ -549,7 +583,7 @@ async function onDrop(e){
     // O destino das cópias pode ser escolhido mesmo sem um handle do original.
     if(count === 0 && droppedFiles.length){
       for(const file of droppedFiles){
-        if(IMG_RE.test(file.name) && addImage(file.name, file.type, file, null)) count++;
+        if(IMG_RE.test(file.name) && await addImage(file.name, file.type, file, null)) count++;
       }
     }
   }catch(err){
@@ -568,7 +602,7 @@ function afterLoad(){
   else renderChooseGrid();
 }
 
-/* Mantém os bytes originais em memória para renderizar e desfazer legendas. */
+/* Base sem legendas: bytes originais ou PNG convertido, no caso de HEIC. */
 async function ensureBlob(img){
   if(!img.blob){
     const src = img.file || (img.handle ? await img.handle.getFile() : null);
@@ -720,7 +754,7 @@ async function openViewer(id){
   const img = images.find(i=> i.id===id);
   if(!img) return;
   $('viewerName').textContent = img.name;
-  $('btnSaveBack').title = 'Salvar cópia: ' + (img.outputName || 'audit_' + img.name) + ' — original preservado';
+  $('btnSaveBack').title = 'Salvar cópia: ' + (img.outputName || auditBaseName(img)) + ' — original preservado';
   legendsOf(img);
   pendingIdx = -1;
   updateLegendBtn(lastLegendPos);
@@ -1104,6 +1138,10 @@ async function ensureWritable(handle){
 
 /* A primeira pasta escolhida é o destino de todas as cópias nesta sessão. */
 let auditDirectory = null;
+function auditBaseName(img){
+  const name = img.isHeic ? img.name.replace(/\.(heic|heif)$/i, '') + '.png' : img.name;
+  return 'audit_' + name;
+}
 async function prepareAuditDirectory(img){
   if(!auditDirectory){
     if(img.directory){
@@ -1142,7 +1180,7 @@ async function writeAuditCopy(img, blob){
     let handle = img.outputHandle;
     let name = img.outputName;
     if(!handle){
-      const base = 'audit_' + img.name;
+      const base = auditBaseName(img);
       const dot = base.lastIndexOf('.');
       const stem = dot > 0 ? base.slice(0, dot) : base;
       const ext = dot > 0 ? base.slice(dot) : '';
@@ -1208,7 +1246,7 @@ async function saveAndBack(){
 }
 
 /* ===================== DESFAZER LEGENDAS =====================
-   Restaura os bytes originais apenas na cópia audit_ desta sessão. */
+   Restaura a imagem sem legendas apenas na cópia audit_ desta sessão (PNG para HEIC). */
 async function undoLegends(id){
   const img = images.find(i=> i.id===id);
   if(!img) return false;

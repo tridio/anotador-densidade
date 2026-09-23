@@ -137,3 +137,19 @@ test('loading a folder does not require another destination picker',async t=>{
  const other={name:'later.jpg'};await context.prepareAuditDirectory(other);
  assert.equal(other.directory,directory);
 });
+test('HEIC output uses PNG extension and preserves an existing PNG copy',async t=>{
+ const {context,img,read,root}=setup(t);
+ img.name='photo.HEIC';img.isHeic=true;
+ fs.writeFileSync(path.join(root,'audit_photo.png'),'existing png');
+ await context.writeAuditCopy(img,'converted png');
+ assert.equal(img.outputName,'audit_photo_1.png');
+ assert.equal(read('audit_photo.png'),'existing png');
+ assert.equal(read('audit_photo_1.png'),'converted png');
+ assert.equal(read('foto.jpg'),'original bytes');
+});
+test('HEIF and MIME-detected HEIC get a PNG filename',t=>{
+ const {context}=setup(t);
+ assert.equal(context.auditBaseName({name:'capture.HEIF',isHeic:true}),'audit_capture.png');
+ assert.equal(context.auditBaseName({name:'capture',isHeic:true}),'audit_capture.png');
+ assert.equal(context.auditBaseName({name:'capture.jpg'}),'audit_capture.jpg');
+});
