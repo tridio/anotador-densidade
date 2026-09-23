@@ -66,7 +66,9 @@ exige abrir o aplicativo no Chrome ou Edge.
    A densidade (`unidades ÷ área`) é calculada na hora e aparece como uma legenda sobre a imagem.
 4. **Arraste a legenda** até o ponto que ela deve marcar. Isso a fixa ali e **zera os campos**,
    liberando a próxima: preencha de novo para criar outra legenda, quantas quiser na mesma imagem.
-5. **Salvar cópia e voltar** grava todas as legendas na cópia `audit_` e volta para a lista.
+5. **Salvar cópia e voltar** grava todas as legendas na cópia `audit_`, incluindo a última
+   preenchida mesmo sem arrastá-la, e volta para a lista. Elas são mantidas ao reabrir
+   a imagem na mesma sessão.
    **Cancelar** volta sem gravar nada.
 
 O botão **Legenda** define em que canto uma legenda nova nasce — útil quando o canto padrão cobre
@@ -103,3 +105,5 @@ em `vendor/`, com a licença e as informações de origem nesse diretório.
   [libheif](https://github.com/strukturag/libheif/blob/master/examples/example.heic).
   O teste usa arquivos temporários do navegador e verifica conversão, dimensões,
   assinatura PNG, preservação do original, desfazer e rejeição de arquivo inválido.
+
+- Regressão de legendas no navegador (Playwright + Edge): `node tests/legends-browser.cjs`.

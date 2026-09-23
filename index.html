@@ -263,7 +263,7 @@
   <!-- ===================== TELA INICIAL ===================== -->
   <section id="screen-start">
     <h1>Anotador de Densidade</h1>
-    <div id="releaseInfo" class="sub">Versão <b>1.5.0</b> · Publicação: <time datetime="2026-09-23T09:29:17-03:00">23/09/2026 às 09:29 (Brasília)</time></div>
+    <div id="releaseInfo" class="sub">Versão <b>1.5.1</b> · Publicação: <time datetime="2026-09-23T09:41:01-03:00">23/09/2026 às 09:41 (Brasília)</time></div>
     <div class="sub">
       Selecione as imagens, escolha uma como referência principal e anote
       <b>unidades</b>, <b>área</b> e a <b>densidade</b> calculada — salvando uma cópia com o prefixo <b>audit_</b>.
@@ -1225,6 +1225,10 @@ async function saveCurrent(){
     const blob = await burnImage(img);
 
     await writeAuditCopy(img, blob);
+
+    // A gravação inclui a legenda ainda nos campos. Confirma-a antes de fechar
+    // para que closeViewer não a descarte como uma edição não salva.
+    pendingIdx = -1;
 
     // marca como anotado e atualiza miniatura para a versão salva
     img.annotated = true;
