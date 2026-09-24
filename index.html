@@ -164,8 +164,8 @@
      para o que você arrasta ser o que sai no arquivo. */
   .legend{
     position:absolute;
-    background:#000; color:#fff;
-    border:0.12em solid #fff;
+    background:#fff; color:#000;
+    border-radius:0.3em;
     padding:0.55em;
     font-family:var(--mono);
     line-height:1.2;
@@ -177,8 +177,7 @@
   }
   .legend.arrastando{ cursor:grabbing; outline:0.12em dashed #fff; outline-offset:0.12em; }
   .legend.pendente{ box-shadow:0 0 0 0.12em #000, 0 0 0 0.24em #fff; }  /* a que está sendo editada */
-  .legend .l1{ font-weight:700; letter-spacing:0.05em; }
-  .legend .l2{ margin-top:0.25em; }
+  .legend{ font-weight:700; }
 
   /* Controles (inputs) abaixo da imagem */
   #controls{
@@ -263,7 +262,7 @@
   <!-- ===================== TELA INICIAL ===================== -->
   <section id="screen-start">
     <h1>Anotador de Densidade</h1>
-    <div id="releaseInfo" class="sub">Versão <b>1.5.2</b> · Publicação: <time datetime="2026-09-23T09:45:09-03:00">23/09/2026 às 09:45 (Brasília)</time></div>
+    <div id="releaseInfo" class="sub">Versão <b>1.6.0</b> · Publicação: <time datetime="2026-09-24T08:46:00-03:00">24/09/2026 às 08:46 (Brasília)</time></div>
     <div class="sub">
       Selecione as imagens, escolha uma como referência principal e anote
       <b>unidades</b>, <b>área</b> e a <b>densidade</b> calculada — salvando uma cópia com o prefixo <b>_audit_</b>.
@@ -803,7 +802,8 @@ function imgBox(){
            escala: viewerImg.naturalWidth ? ir.width / viewerImg.naturalWidth : 1 };
 }
 // mesma fórmula usada na gravação (drawLegend), para a prévia bater com o arquivo
-const fonteNatural = W => Math.max(14, Math.min(W*0.020, 46));
+const fonteNatural = W => 1.5 * Math.max(18, Math.min(W*0.026, 60));
+const textoLegenda = leg => `${fmtInt(leg.und)} (${fmtDens(leg.dens)})`;
 const margemNatural = W => Math.max(8, Math.round(W*0.012));
 
 /* ---- desenha as legendas sobre a imagem ---- */
@@ -814,15 +814,14 @@ function renderLegends(){
   const b = imgBox();
   if(!b.w || !b.h) return;
 
-  const fs = Math.max(8, fonteNatural(viewerImg.naturalWidth) * b.escala); // piso p/ não sumir
+  const fs = Math.max(12, fonteNatural(viewerImg.naturalWidth) * b.escala); // piso p/ não sumir
   const mg = margemNatural(viewerImg.naturalWidth) * b.escala;
 
   legendsOf(img).forEach((leg, i)=>{
     const el = document.createElement('div');
     el.className = 'legend' + (i===pendingIdx ? ' pendente' : '');
     el.style.fontSize = fs + 'px';
-    el.innerHTML = `<div class="l1">DENSIDADE ${fmtDens(leg.dens)}</div>` +
-                   `<div class="l2">${fmtInt(leg.und)} ÷ ${fmtArea(leg.area)} = ${fmtDens(leg.dens)}</div>`;
+    el.textContent = textoLegenda(leg);
     el.title = 'Arraste para posicionar';
     imgStage.appendChild(el);
 
@@ -956,21 +955,17 @@ inpArea.addEventListener('keydown', e=>{ if(e.key==='Enter' && !$('btnSaveBack')
 
 /* ===================== DESENHAR A LEGENDA NO CANVAS (para gravar) ===================== */
 function drawLegend(ctx, W, H, leg){
-  const line1 = 'DENSIDADE ' + fmtDens(leg.dens);
-  const line2 = `${fmtInt(leg.und)} ÷ ${fmtArea(leg.area)} = ${fmtDens(leg.dens)}`;
-  const fs = fonteNatural(W);                       // "pequeno, porém legível"
-  const pad = Math.round(fs*0.55);
-  const gap = Math.round(fs*0.25);
-  const lineH = Math.round(fs*1.2);
+  const text = textoLegenda(leg);
+  const fs = fonteNatural(W);
+  const pad = fs*0.55;
+  const lineH = fs*1.2;
   const fontBold = `700 ${fs}px ui-monospace, "Courier New", monospace`;
-  const fontReg  = `${fs}px ui-monospace, "Courier New", monospace`;
 
   ctx.textBaseline='top';
-  ctx.font = fontBold; const w1 = ctx.measureText(line1).width;
-  ctx.font = fontReg;  const w2 = ctx.measureText(line2).width;
+  ctx.font = fontBold;
 
-  const boxW = Math.ceil(Math.max(w1,w2) + pad*2);
-  const boxH = Math.ceil(pad*2 + lineH*2 + gap);
+  const boxW = Math.ceil(ctx.measureText(text).width + pad*2);
+  const boxH = Math.ceil(pad*2 + lineH);
   const margin = margemNatural(W);
 
   let x, y;
@@ -986,12 +981,12 @@ function drawLegend(ctx, W, H, leg){
   x = Math.min(Math.max(x, 0), Math.max(0, W - boxW));   // nunca vaza da imagem
   y = Math.min(Math.max(y, 0), Math.max(0, H - boxH));
 
-  const b = Math.max(2, Math.round(fs*0.12)); // borda branca
-  ctx.fillStyle = '#fff'; ctx.fillRect(x-b, y-b, boxW+2*b, boxH+2*b);
-  ctx.fillStyle = '#000'; ctx.fillRect(x, y, boxW, boxH);
   ctx.fillStyle = '#fff';
-  ctx.font = fontBold; ctx.fillText(line1, x+pad, y+pad);
-  ctx.font = fontReg;  ctx.fillText(line2, x+pad, y+pad+lineH+gap);
+  ctx.beginPath();
+  ctx.roundRect(x, y, boxW, boxH, fs*0.3);
+  ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.fillText(text, x+pad, y+pad);
 }
 
 /* ===================== PRESERVAR METADADOS DO ORIGINAL =====================

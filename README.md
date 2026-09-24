@@ -1,8 +1,9 @@
 # Anotador de Densidade
 
 Ferramenta local para anotar densidade em imagens: você preenche **unidades** e **área**, a
-**densidade** é calculada sozinha e gravada em uma cópia da imagem como uma legenda preta no canto
-inferior direito, com a memória de cálculo.
+**densidade** é calculada sozinha e gravada em uma cópia da imagem como uma legenda retangular
+com cantos arredondados, fundo branco e letras pretas, no formato **unidades (densidade)**.
+A legenda começa no canto inferior direito.
 
 Não exige build. Abra `index.html` mantendo a pasta `vendor/` ao lado dele.
 O conversor HEIC local só é carregado quando uma foto HEIC/HEIF é aberta.
