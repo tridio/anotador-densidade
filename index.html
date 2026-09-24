@@ -153,7 +153,7 @@
   #viewer{ flex:1; display:flex; flex-direction:column; min-height:0; }
   #imgStage{
     flex:1; position:relative; display:flex; align-items:center; justify-content:center;
-    padding:10px; min-height:0; overflow:hidden;
+    padding:10px 50px 10px 10px; min-height:0; overflow:hidden;
     background:repeating-conic-gradient(#000 0% 25%, #0a0a0a 0% 50%) 50% / 24px 24px;
   }
   /* A imagem é filha direta do palco: assim max-height:100% resolve contra uma
@@ -178,6 +178,23 @@
   .legend.arrastando{ cursor:grabbing; outline:0.12em dashed #fff; outline-offset:0.12em; }
   .legend.pendente{ box-shadow:0 0 0 0.12em #000, 0 0 0 0.24em #fff; }  /* a que está sendo editada */
   .legend{ font-weight:700; }
+  .legend:hover, .legend:focus-within{ z-index:6; }
+  .legend-tools{
+    position:absolute; left:100%; top:0; padding-left:6px;
+    display:flex; flex-direction:column; gap:4px;
+    visibility:hidden; opacity:0; cursor:default;
+  }
+  .legend:hover .legend-tools, .legend:focus-within .legend-tools{
+    visibility:visible; opacity:1;
+  }
+  .legend-tools button{
+    display:flex; align-items:center; justify-content:center;
+    width:32px; height:32px; padding:5px; border:1px solid #000;
+    border-radius:6px; background:#fff; color:#000; cursor:pointer;
+  }
+  .legend-tools button:hover{ background:#e8e8e8; }
+  .legend-tools button:focus-visible{ outline:2px solid #1683ff; outline-offset:2px; }
+  .legend-tools svg{ width:20px; height:20px; pointer-events:none; }
 
   /* Controles (inputs) abaixo da imagem */
   #controls{
@@ -262,7 +279,7 @@
   <!-- ===================== TELA INICIAL ===================== -->
   <section id="screen-start">
     <h1>Anotador de Densidade</h1>
-    <div id="releaseInfo" class="sub">Versão <b>1.6.0</b> · Publicação: <time datetime="2026-09-24T08:46:00-03:00">24/09/2026 às 08:46 (Brasília)</time></div>
+    <div id="releaseInfo" class="sub">Versão <b>1.7.0</b> · Publicação: <time datetime="2026-09-24T09:01:00-03:00">24/09/2026 às 09:01 (Brasília)</time></div>
     <div class="sub">
       Selecione as imagens, escolha uma como referência principal e anote
       <b>unidades</b>, <b>área</b> e a <b>densidade</b> calculada — salvando uma cópia com o prefixo <b>_audit_</b>.
@@ -743,6 +760,7 @@ const imgStage  = $('imgStage');
 
 const CANTOS = ['br','bl','tl','tr'];   // onde uma legenda NOVA nasce
 let lastLegendPos = 'br';
+let lastLegendScale = 1;
 let pendingIdx = -1;                    // índice da legenda ligada aos inputs (-1 = nenhuma)
 let viewerRO = null;
 
@@ -820,9 +838,27 @@ function renderLegends(){
   legendsOf(img).forEach((leg, i)=>{
     const el = document.createElement('div');
     el.className = 'legend' + (i===pendingIdx ? ' pendente' : '');
-    el.style.fontSize = fs + 'px';
+    el.style.fontSize = fs * (leg.scale ?? 1) + 'px';
     el.textContent = textoLegenda(leg);
     el.title = 'Arraste para posicionar';
+    el.tabIndex = 0;
+    const controls = document.createElement('div');
+    controls.className = 'legend-tools';
+    for(const [direction, label] of [[1, 'Aumentar legenda'], [-1, 'Diminuir legenda']]){
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.title = label;
+      button.setAttribute('aria-label', label);
+      button.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M15 15l6 6M6 10h8${direction > 0 ? 'M10 6v8' : ''}"/></svg>`;
+      button.addEventListener('click', ()=>{
+        leg.scale = Math.max(0.25, Math.min(4, (leg.scale ?? 1) * Math.pow(1.1, direction)));
+        lastLegendScale = leg.scale;
+        el.style.fontSize = fs * leg.scale + 'px';
+        ajustarPosicaoLegenda(el, leg);
+      });
+      controls.appendChild(button);
+    }
+    el.appendChild(controls);
     imgStage.appendChild(el);
 
     if(leg.x==null){                        // ainda presa a um canto
@@ -837,13 +873,29 @@ function renderLegends(){
       el.style.top  = (b.oy + leg.y * b.h) + 'px';
       el.style.right = 'auto'; el.style.bottom = 'auto';
     }
+    ajustarPosicaoLegenda(el, leg);
     tornarArrastavel(el, img, leg);
   });
+}
+
+// Mantém a legenda na imagem e os controles acessíveis junto à borda inferior.
+function ajustarPosicaoLegenda(el, leg){
+  const b = imgBox();
+  if(leg.x != null){
+    leg.x = Math.max(0, Math.min(leg.x, (b.w - el.offsetWidth) / b.w));
+    leg.y = Math.max(0, Math.min(leg.y, (b.h - el.offsetHeight) / b.h));
+    el.style.left = (b.ox + leg.x * b.w) + 'px';
+    el.style.top = (b.oy + leg.y * b.h) + 'px';
+  }
+  const controls = el.querySelector('.legend-tools');
+  controls.style.top = Math.max(-el.offsetTop, Math.min(0,
+    imgStage.clientHeight - el.offsetTop - controls.offsetHeight - 4)) + 'px';
 }
 
 /* ---- arrastar: fixa a legenda e libera a próxima ---- */
 function tornarArrastavel(el, img, leg){
   el.addEventListener('pointerdown', (ev)=>{
+    if(ev.target.closest('.legend-tools')) return;
     ev.preventDefault();
     const b = imgBox();
     const r = el.getBoundingClientRect();
@@ -864,6 +916,7 @@ function tornarArrastavel(el, img, leg){
       el.style.right='auto'; el.style.bottom='auto';
       leg.x = (px - b.ox) / b.w;
       leg.y = (py - b.oy) / b.h;
+      ajustarPosicaoLegenda(el, leg);
     };
     const soltar = ()=>{
       el.removeEventListener('pointermove', mover);
@@ -929,7 +982,7 @@ function compute(){
     const legs = legendsOf(img);
     if(Number.isFinite(dens)){
       if(pendingIdx < 0){                       // primeira digitação: nasce uma legenda nova
-        legs.push({ und, area, dens, canto:lastLegendPos, x:null, y:null });
+        legs.push({ und, area, dens, canto:lastLegendPos, x:null, y:null, scale:lastLegendScale });
         pendingIdx = legs.length - 1;
       }else{
         Object.assign(legs[pendingIdx], { und, area, dens });
@@ -956,7 +1009,7 @@ inpArea.addEventListener('keydown', e=>{ if(e.key==='Enter' && !$('btnSaveBack')
 /* ===================== DESENHAR A LEGENDA NO CANVAS (para gravar) ===================== */
 function drawLegend(ctx, W, H, leg){
   const text = textoLegenda(leg);
-  const fs = fonteNatural(W);
+  const fs = fonteNatural(W) * (leg.scale ?? 1);
   const pad = fs*0.55;
   const lineH = fs*1.2;
   const fontBold = `700 ${fs}px ui-monospace, "Courier New", monospace`;

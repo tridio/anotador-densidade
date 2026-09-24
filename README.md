@@ -4,6 +4,10 @@ Ferramenta local para anotar densidade em imagens: você preenche **unidades** e
 **densidade** é calculada sozinha e gravada em uma cópia da imagem como uma legenda retangular
 com cantos arredondados, fundo branco e letras pretas, no formato **unidades (densidade)**.
 A legenda começa no canto inferior direito.
+Passe o mouse sobre uma legenda para mostrar as lupas **+** e **−** à direita.
+As lupas aumentam ou diminuem somente a legenda selecionada; as outras mantêm seus tamanhos.
+O último tamanho escolhido vira o padrão das próximas legendas durante a sessão,
+inclusive em outras imagens, e o tamanho individual é preservado na cópia salva.
 
 Não exige build. Abra `index.html` mantendo a pasta `vendor/` ao lado dele.
 O conversor HEIC local só é carregado quando uma foto HEIC/HEIF é aberta.
